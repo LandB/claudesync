@@ -8,8 +8,9 @@ const s = {
   sel:      { background:'#1a1a1a', border:'1px solid #333', color:'#e8e8e8', padding:'4px 10px', borderRadius:'6px', fontSize:'0.85rem', cursor:'pointer' },
   badge:    { fontSize:'0.75rem', color:'#555', marginLeft:'auto' },
   ta:       { width:'100%', minHeight:'400px', background:'#111', border:'1px solid #252525', borderRadius:'8px', color:'#e8e8e8', padding:'1rem', fontSize:'0.85rem', fontFamily:'monospace', lineHeight:'1.6', resize:'vertical', outline:'none' },
-  row:      { display:'flex', gap:'0.5rem', marginTop:'0.75rem' },
+  row:      { display:'flex', gap:'0.5rem', marginTop:'0.75rem', flexWrap:'wrap' },
   btn:      (primary) => ({ padding:'6px 16px', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem', border:'none', background: primary ? '#7c3aed' : '#1a1a1a', color: primary ? '#fff' : '#aaa', border: primary ? 'none' : '1px solid #333' }),
+  btnDanger:{ padding:'6px 16px', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem', border:'1px solid #7f1d1d', background:'none', color:'#f87171' },
   msg:      (ok) => ({ marginTop:'0.5rem', fontSize:'0.8rem', color: ok ? '#22c55e' : '#f87171' }),
   empty:    { color:'#555', fontSize:'0.9rem' },
 }
@@ -20,16 +21,19 @@ export default function FileEditor() {
   const [content, setContent] = useState('')
   const [original, setOriginal] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
   const [msg, setMsg] = useState(null)
 
-  useEffect(() => {
-    supabase.from('sync_files').select('path, storage_path, hash, size_bytes, updated_at')
+  useEffect(() => { loadFiles() }, [])
+
+  async function loadFiles() {
+    const { data } = await supabase.from('sync_files').select('path, storage_path, hash, size_bytes, updated_at')
       .eq('deleted', false).order('path')
-      .then(({ data }) => {
-        setFiles(data ?? [])
-        if (data?.length && !selected) selectFile(data[0])
-      })
-  }, [])
+    setFiles(data ?? [])
+    if (data?.length) selectFile(data[0])
+    else { setSelected(null); setContent(''); setOriginal('') }
+  }
 
   async function selectFile(file) {
     setSelected(file)
@@ -60,7 +64,6 @@ export default function FileEditor() {
         updated_at: new Date().toISOString(), deleted: false,
       }, { onConflict: 'user_id,path' })
 
-      // Queue for all devices
       const { data: devices } = await supabase.from('devices').select('id')
       if (devices?.length) {
         await supabase.from('change_queue').insert(
@@ -79,17 +82,74 @@ export default function FileEditor() {
     setSaving(false)
   }
 
-  function discard() { setContent(original); setMsg(null) }
+  async function deleteFile() {
+    if (!selected) return
+    setDeleting(true); setMsg(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.storage.from('claude-env').remove([selected.storage_path])
+      await supabase.from('sync_files')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id).eq('path', selected.path)
+
+      const { data: devices } = await supabase.from('devices').select('id')
+      if (devices?.length) {
+        await supabase.from('change_queue').insert(
+          devices.map(d => ({
+            user_id: user.id, target_device: d.id, file_path: selected.path,
+            operation: 'delete', storage_path: selected.storage_path, hash: '',
+          }))
+        )
+      }
+      await loadFiles()
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    }
+    setDeleting(false)
+  }
+
+  async function deleteAll() {
+    if (!confirmDeleteAll) { setConfirmDeleteAll(true); return }
+    setConfirmDeleteAll(false)
+    setDeleting(true); setMsg(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const storagePaths = files.map(f => f.storage_path)
+      if (storagePaths.length) await supabase.storage.from('claude-env').remove(storagePaths)
+      await supabase.from('sync_files')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id).eq('deleted', false)
+
+      const { data: devices } = await supabase.from('devices').select('id')
+      if (devices?.length) {
+        const rows = files.flatMap(f =>
+          devices.map(d => ({
+            user_id: user.id, target_device: d.id, file_path: f.path,
+            operation: 'delete', storage_path: f.storage_path, hash: '',
+          }))
+        )
+        if (rows.length) await supabase.from('change_queue').insert(rows)
+      }
+      await loadFiles()
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+    }
+    setDeleting(false)
+  }
+
+  function discard() { setContent(original); setMsg(null); setConfirmDeleteAll(false) }
   const dirty = content !== original
 
   return (
     <div style={s.wrap}>
       <div style={s.head}>
         <h2 style={s.h2}>Files</h2>
-        <select style={s.sel} value={selected?.path ?? ''} onChange={e => selectFile(files.find(f => f.path === e.target.value))}>
-          {files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
-        </select>
-        {selected && <span style={s.badge}>{(selected.size_bytes / 1024).toFixed(1)} KB</span>}
+        {files.length > 0 && <>
+          <select style={s.sel} value={selected?.path ?? ''} onChange={e => selectFile(files.find(f => f.path === e.target.value))}>
+            {files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
+          </select>
+          {selected && <span style={s.badge}>{(selected.size_bytes / 1024).toFixed(1)} KB</span>}
+        </>}
       </div>
       {files.length === 0
         ? <div style={s.empty}>No files synced yet. Install the agent and it will appear here.</div>
@@ -100,6 +160,12 @@ export default function FileEditor() {
                 {saving ? 'Saving…' : 'Save & Sync'}
               </button>
               {dirty && <button style={s.btn(false)} onClick={discard}>Discard</button>}
+              <button style={s.btnDanger} onClick={deleteFile} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete file'}
+              </button>
+              <button style={s.btnDanger} onClick={deleteAll} disabled={deleting}>
+                {confirmDeleteAll ? 'Confirm delete all?' : 'Delete all files'}
+              </button>
             </div>
             {msg && <div style={s.msg(msg.ok)}>{msg.text}</div>}
           </>

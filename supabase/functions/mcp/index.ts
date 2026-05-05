@@ -104,6 +104,22 @@ const TOOLS = [
       required: ['file_path', 'local_content'],
     },
   },
+  {
+    name: 'delete_file',
+    description: 'Delete a single synced file from ClaudeSync storage and queue removal on all devices.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Relative path inside ~/.claude, e.g. CLAUDE.md' },
+      },
+      required: ['file_path'],
+    },
+  },
+  {
+    name: 'delete_all_files',
+    description: 'Delete ALL synced files for this user — useful for a fresh sync. Queues delete on all devices.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ]
 
 async function handleSyncPush(userId: string, args: Record<string,string>, supabase: SupabaseClient) {
@@ -245,16 +261,62 @@ async function handleDiff(userId: string, args: Record<string,string>, supabase:
   return toolOk(out.join('\n'))
 }
 
+async function handleDeleteFile(userId: string, args: Record<string,string>, supabase: SupabaseClient) {
+  const { file_path } = args
+  if (!file_path) return toolErr('file_path required')
+  const { data: meta } = await supabase.from('sync_files')
+    .select('storage_path').eq('user_id', userId).eq('path', file_path).single()
+  if (!meta) return toolErr(`File not found: ${file_path}`)
+  await supabase.storage.from('claude-env').remove([meta.storage_path])
+  await supabase.from('sync_files')
+    .update({ deleted: true, updated_at: new Date().toISOString() })
+    .eq('user_id', userId).eq('path', file_path)
+  const { data: devices } = await supabase.from('devices').select('id').eq('user_id', userId)
+  if (devices?.length) {
+    await supabase.from('change_queue').insert(
+      devices.map((d: {id: string}) => ({
+        user_id: userId, target_device: d.id, file_path,
+        operation: 'delete', storage_path: meta.storage_path, hash: '',
+      }))
+    )
+  }
+  return toolOk(`Deleted ${file_path} — queued removal on ${devices?.length ?? 0} device(s)`)
+}
+
+async function handleDeleteAllFiles(userId: string, _args: unknown, supabase: SupabaseClient) {
+  const { data: allFiles } = await supabase.from('sync_files')
+    .select('path, storage_path').eq('user_id', userId).eq('deleted', false)
+  if (!allFiles?.length) return toolOk('No files to delete.')
+  const storagePaths = allFiles.map((f: {storage_path: string}) => f.storage_path)
+  await supabase.storage.from('claude-env').remove(storagePaths)
+  await supabase.from('sync_files')
+    .update({ deleted: true, updated_at: new Date().toISOString() })
+    .eq('user_id', userId).eq('deleted', false)
+  const { data: devices } = await supabase.from('devices').select('id').eq('user_id', userId)
+  if (devices?.length) {
+    const rows = allFiles.flatMap((f: {path: string; storage_path: string}) =>
+      devices.map((d: {id: string}) => ({
+        user_id: userId, target_device: d.id, file_path: f.path,
+        operation: 'delete', storage_path: f.storage_path, hash: '',
+      }))
+    )
+    if (rows.length) await supabase.from('change_queue').insert(rows)
+  }
+  return toolOk(`Deleted ${allFiles.length} file(s) — queued removal on ${devices?.length ?? 0} device(s)`)
+}
+
 async function dispatchTool(userId: string, name: string, args: Record<string,string>, supabase: SupabaseClient) {
   switch (name) {
-    case 'sync_push':      return handleSyncPush(userId, args, supabase)
-    case 'sync_pull':      return handleSyncPull(userId, args, supabase)
-    case 'device_status':  return handleDeviceStatus(userId, args, supabase)
-    case 'list_skills':    return handleListSkills(userId, args, supabase)
-    case 'install_skill':  return handleInstall('skill', userId, args, supabase)
-    case 'install_plugin': return handleInstall('plugin', userId, args, supabase)
-    case 'diff':           return handleDiff(userId, args, supabase)
-    default:               return toolErr(`Unknown tool: ${name}`)
+    case 'sync_push':        return handleSyncPush(userId, args, supabase)
+    case 'sync_pull':        return handleSyncPull(userId, args, supabase)
+    case 'device_status':    return handleDeviceStatus(userId, args, supabase)
+    case 'list_skills':      return handleListSkills(userId, args, supabase)
+    case 'install_skill':    return handleInstall('skill', userId, args, supabase)
+    case 'install_plugin':   return handleInstall('plugin', userId, args, supabase)
+    case 'diff':             return handleDiff(userId, args, supabase)
+    case 'delete_file':      return handleDeleteFile(userId, args, supabase)
+    case 'delete_all_files': return handleDeleteAllFiles(userId, args, supabase)
+    default:                 return toolErr(`Unknown tool: ${name}`)
   }
 }
 
