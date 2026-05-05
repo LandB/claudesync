@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+process.title = 'claudesync-agent'
 import { hostname, platform } from 'os'
 import { createClient } from '@supabase/supabase-js'
 import chokidar from 'chokidar'
