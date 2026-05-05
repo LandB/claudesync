@@ -6,6 +6,8 @@ const IGNORE = [
   /[/\\]\.git([/\\]|$)/,
   /[/\\]node_modules([/\\]|$)/,
   /[/\\]plugins[/\\]cache([/\\]|$)/,
+  /[/\\]projects([/\\]|$)/,   // per-project data, not global
+  /[/\\]statsig([/\\]|$)/,    // analytics cache
   /\.DS_Store$/,
   /\.swp$/,
   /\.tmp$/,
