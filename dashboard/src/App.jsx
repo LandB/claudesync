@@ -6,8 +6,9 @@ import FileEditor    from './components/FileEditor'
 import TokenPanel    from './components/TokenPanel'
 import SyncPanel     from './components/SyncPanel'
 import PluginManager from './components/PluginManager'
+import ConflictLog   from './components/ConflictLog'
 
-const VIEWS = ['overview', 'devices', 'files', 'plugins', 'token']
+const VIEWS = ['overview', 'devices', 'files', 'plugins', 'conflicts', 'token']
 
 const s = {
   app:    { display:'flex', minHeight:'100vh' },
@@ -24,8 +25,8 @@ const s = {
   main:   { flex:1, padding:'2rem 2.5rem', maxWidth:'900px', overflowY:'auto' },
 }
 
-const LABELS = { overview:'Overview', devices:'Devices', files:'Files', plugins:'Plugins', token:'Token & Install' }
-const ICONS  = { overview:'◈', devices:'⬡', files:'≡', plugins:'⊞', token:'◉' }
+const LABELS = { overview:'Overview', devices:'Devices', files:'Files', plugins:'Plugins', conflicts:'Conflicts', token:'Token & Install' }
+const ICONS  = { overview:'◈', devices:'⬡', files:'≡', plugins:'⊞', conflicts:'⚡', token:'◉' }
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -65,8 +66,9 @@ export default function App() {
         {view === 'overview' && <SyncPanel />}
         {view === 'devices'  && <Devices />}
         {view === 'files'    && <FileEditor />}
-        {view === 'plugins'  && <PluginManager />}
-        {view === 'token'    && <TokenPanel />}
+        {view === 'plugins'   && <PluginManager />}
+        {view === 'conflicts' && <ConflictLog />}
+        {view === 'token'     && <TokenPanel />}
       </main>
     </div>
   )
