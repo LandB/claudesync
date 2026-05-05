@@ -51,7 +51,7 @@ export default function TokenPanel() {
     ? `curl -fsSL "${url}/functions/v1/install-script?token=${token}" | bash`
     : ''
   const mcpCmd = token
-    ? `claude mcp add --transport http claudesync \\\n  ${url}/functions/v1/mcp \\\n  --header 'Authorization: Bearer ${token}'`
+    ? `claude mcp add --transport http claudesync \\\n  ${url}/functions/v1/mcp \\\n  --header 'Authorization: Bearer ${token}' \\\n  --scope global`
     : ''
 
   return (
@@ -84,7 +84,7 @@ export default function TokenPanel() {
         <div style={s.codeWrap}>
           <div style={s.code}>{mcpCmd}</div>
           <button style={s.cpyBtn(copiedMcp)} onClick={() => {
-            navigator.clipboard.writeText(mcpCmd.replace('\\\n  ', ' '))
+            navigator.clipboard.writeText(mcpCmd.replace(/\\\n\s+/g, ' '))
             setCopiedMcp(true); setTimeout(() => setCopiedMcp(false), 2000)
           }}>{copiedMcp ? '✓' : '⎘'}</button>
         </div>
