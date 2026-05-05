@@ -10,7 +10,9 @@ const s = {
   row:     { display:'flex', gap:'0.5rem', flexWrap:'wrap' },
   btn:     (danger) => ({ padding:'6px 14px', borderRadius:'6px', cursor:'pointer', fontSize:'0.82rem', border: danger ? '1px solid #7f1d1d' : '1px solid #333', background:'none', color: danger ? '#f87171' : '#aaa' }),
   install: { marginTop:'1.5rem' },
+  codeWrap:{ position:'relative' },
   code:    { background:'#111', border:'1px solid #252525', borderRadius:'6px', padding:'1rem', fontFamily:'monospace', fontSize:'0.8rem', color:'#6ee7b7', whiteSpace:'pre-wrap', wordBreak:'break-all' },
+  cpyBtn:  (ok) => ({ position:'absolute', top:'8px', right:'8px', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:'5px', color: ok ? '#4ade80' : '#555', cursor:'pointer', fontSize:'0.75rem', padding:'3px 8px', lineHeight:'1.4' }),
   msg:     (ok) => ({ marginTop:'0.5rem', fontSize:'0.8rem', color: ok ? '#22c55e' : '#f87171' }),
   warn:    { background:'#1c1007', border:'1px solid #78350f', borderRadius:'6px', padding:'0.75rem', fontSize:'0.82rem', color:'#fb923c', marginBottom:'1rem' },
 }
@@ -19,6 +21,8 @@ export default function TokenPanel() {
   const [token, setToken] = useState(null)
   const [url, setUrl] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copiedInstall, setCopiedInstall] = useState(false)
+  const [copiedMcp, setCopiedMcp] = useState(false)
   const [msg, setMsg] = useState(null)
   const [confirming, setConfirming] = useState(false)
 
@@ -68,10 +72,22 @@ export default function TokenPanel() {
 
       <div style={s.install}>
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.5rem' }}>Install Agent</div>
-        <div style={s.code}>{installCmd}</div>
+        <div style={s.codeWrap}>
+          <div style={s.code}>{installCmd}</div>
+          <button style={s.cpyBtn(copiedInstall)} onClick={() => {
+            navigator.clipboard.writeText(installCmd)
+            setCopiedInstall(true); setTimeout(() => setCopiedInstall(false), 2000)
+          }}>{copiedInstall ? '✓' : '⎘'}</button>
+        </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Add MCP to Claude Code</div>
-        <div style={s.code}>{mcpCmd}</div>
+        <div style={s.codeWrap}>
+          <div style={s.code}>{mcpCmd}</div>
+          <button style={s.cpyBtn(copiedMcp)} onClick={() => {
+            navigator.clipboard.writeText(mcpCmd.replace('\\\n  ', ' '))
+            setCopiedMcp(true); setTimeout(() => setCopiedMcp(false), 2000)
+          }}>{copiedMcp ? '✓' : '⎘'}</button>
+        </div>
       </div>
     </div>
   )
