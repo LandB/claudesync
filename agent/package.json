@@ -1,0 +1,17 @@
+{
+  "name": "claudesync-agent",
+  "version": "1.0.0",
+  "description": "ClaudeSync local agent — keeps ~/.claude in sync across devices",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "claudesync-agent": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "chokidar": "^4.0.3"
+  }
+}

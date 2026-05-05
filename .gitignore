@@ -1,0 +1,31 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# build output
+dist/
+build/
+
+# env — never commit real keys
+.env.local
+.env.*.local
+.env.production
+
+# Supabase CLI runtime state (project ref, pooler URLs, etc.)
+supabase/.temp/
+
+# Claude Code project settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+plans/
