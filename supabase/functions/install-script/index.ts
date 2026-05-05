@@ -12,7 +12,15 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
 
-  const userId = await validateToken(req, supabase)
+  // Accept token via query param (curl | bash) or Authorization header
+  const reqUrl = new URL(req.url)
+  const rawToken = reqUrl.searchParams.get('token')
+    ?? req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!rawToken) return unauthorizedResponse()
+
+  const { data: profileRow } = await supabase
+    .from('profiles').select('id').eq('token', rawToken).single()
+  const userId = profileRow?.id ?? null
   if (!userId) return unauthorizedResponse()
 
   const { data: profile } = await supabase

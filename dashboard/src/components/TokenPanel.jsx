@@ -48,7 +48,7 @@ export default function TokenPanel() {
   }
 
   const installCmd = token
-    ? `curl -fsSL ${url}/functions/v1/install-script | bash`
+    ? `curl -fsSL "${url}/functions/v1/install-script?token=${token}" | bash`
     : ''
   const mcpCmd = token
     ? `claude mcp add --transport http claudesync \\\n  ${url}/functions/v1/mcp \\\n  --header 'Authorization: Bearer ${token}'`
