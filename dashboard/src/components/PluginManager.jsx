@@ -22,6 +22,7 @@ const s = {
   empty:    { color:'#555', fontSize:'0.85rem', padding:'2rem 0' },
   devsel:   { background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:'6px', color:'#e8e8e8', padding:'7px 10px', fontSize:'0.85rem', cursor:'pointer' },
   insthead: { display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap' },
+  grplabel: { fontSize:'0.75rem', color:'#555', fontFamily:'monospace', padding:'0.75rem 0 0.35rem', borderBottom:'1px solid #1a1a1a', marginBottom:'0.4rem' },
 }
 
 export default function PluginManager() {
@@ -119,6 +120,17 @@ export default function PluginManager() {
   const installedPaths = new Set(installed.map(i => i.path))
   const isInstalled = (p) => installedPaths.has(`plugins/${p.name}.json`) || installedPaths.has(`skills/${p.name}.md`)
 
+  function groupInstalled() {
+    const groups = new Map()
+    for (const f of installed) {
+      const slash = f.path.indexOf('/')
+      const folder = slash === -1 ? '' : f.path.slice(0, slash)
+      if (!groups.has(folder)) groups.set(folder, [])
+      groups.get(folder).push(f)
+    }
+    return groups
+  }
+
   return (
     <div style={s.wrap}>
       <h2 style={s.h2}>Plugins & Skills</h2>
@@ -182,14 +194,22 @@ export default function PluginManager() {
         </div>
         {installed.length === 0 && <div style={s.empty}>Nothing installed yet.</div>}
         <div style={s.grid}>
-          {installed.map(f => (
-            <div key={f.path} style={s.card}>
-              <div style={s.info}>
-                <div style={s.name}>{f.path}</div>
-                <div style={s.desc}>{(f.size_bytes / 1024).toFixed(1)} KB · updated {new Date(f.updated_at).toLocaleDateString()}</div>
-              </div>
-              <button style={{ ...s.btn(false), background:'none', border:'1px solid #3f0000', color:'#f87171' }}
-                onClick={() => uninstall(f.path)}>Remove</button>
+          {[...groupInstalled().entries()].map(([folder, files]) => (
+            <div key={folder}>
+              <div style={s.grplabel}>{folder ? folder + '/' : 'root'}</div>
+              {files.map(f => {
+                const relPath = folder ? f.path.slice(folder.length + 1) : f.path
+                return (
+                  <div key={f.path} style={{ ...s.card, marginBottom:'0.5rem' }}>
+                    <div style={s.info}>
+                      <div style={s.name}>{relPath}</div>
+                      <div style={s.desc}>{(f.size_bytes / 1024).toFixed(1)} KB · updated {new Date(f.updated_at).toLocaleDateString()}</div>
+                    </div>
+                    <button style={{ ...s.btn(false), background:'none', border:'1px solid #3f0000', color:'#f87171' }}
+                      onClick={() => uninstall(f.path)}>Remove</button>
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>
