@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { loadConfig } from './lib/config.js'
 import { loadHashCache, saveHashCache } from './lib/hash-cache.js'
+import { normalizePluginPaths } from './lib/normalize-plugin-paths.js'
 
 const configPath = process.env.CLAUDESYNC_CONFIG
 const config = loadConfig(configPath)
@@ -52,7 +53,7 @@ async function main() {
       continue
     }
 
-    const content = Buffer.from(await res.arrayBuffer())
+    const content = normalizePluginPaths(f.path, Buffer.from(await res.arrayBuffer()), claudePath)
     mkdirSync(dirname(absPath), { recursive: true })
     writeFileSync(absPath, content)
     hashCache.set(f.path, f.hash)

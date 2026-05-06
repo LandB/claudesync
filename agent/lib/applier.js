@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
+import { normalizePluginPaths } from './normalize-plugin-paths.js'
 
 const APPLY_BLOCKLIST = [
   /^plugins[/\\]marketplaces([/\\]|$)/,
@@ -38,7 +39,7 @@ export async function applyChange(item, claudePath, hashCache) {
     return
   }
 
-  const content = Buffer.from(await res.arrayBuffer())
+  const content = normalizePluginPaths(item.file_path, Buffer.from(await res.arrayBuffer()), claudePath)
   mkdirSync(dirname(absPath), { recursive: true })
   writeFileSync(absPath, content)
   hashCache.set(item.file_path, item.hash)
