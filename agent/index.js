@@ -7,6 +7,7 @@ import { loadConfig } from './lib/config.js'
 import { ApiClient } from './lib/api.js'
 import { applyChange } from './lib/applier.js'
 import { startWatcher } from './lib/watcher.js'
+import { loadHashCache, saveHashCache } from './lib/hash-cache.js'
 
 const POLL_INTERVAL_MS = 30_000
 
@@ -38,7 +39,7 @@ async function main() {
   })
   console.log(`[startup] device_id: ${deviceId}`)
 
-  const hashCache = new Map()
+  const hashCache = loadHashCache()
 
   // 2. Pull any changes missed while offline
   console.log('[startup] pulling queued changes...')
@@ -65,7 +66,7 @@ async function main() {
   }, POLL_INTERVAL_MS)
 
   // 5. Watch ~/.claude for local changes
-  startWatcher({ claudePath, deviceId, hashCache, api, chokidar })
+  startWatcher({ claudePath, deviceId, hashCache, api, chokidar, saveHashCache })
 
   // 6. Heartbeat every 30s
   setInterval(async () => {

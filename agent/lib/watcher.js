@@ -2,35 +2,48 @@ import { readFileSync } from 'fs'
 import { relative } from 'path'
 import { sha256 } from './api.js'
 
-const IGNORE = [
+// Chokidar-level: skip entire subtrees for performance
+const CHOKIDAR_IGNORE = [
   /[/\\]\.git([/\\]|$)/,
   /[/\\]node_modules([/\\]|$)/,
   /[/\\]plugins[/\\]cache([/\\]|$)/,
-  /[/\\]projects([/\\]|$)/,   // per-project data, not global
-  /[/\\]statsig([/\\]|$)/,    // analytics cache
-  /\.DS_Store$/,
-  /\.swp$/,
-  /\.tmp$/,
-  /~$/,
+  /[/\\]projects([/\\]|$)/,
+  /[/\\]statsig([/\\]|$)/,
 ]
 
-function isIgnored(absPath) {
-  return IGNORE.some(re => re.test(absPath))
+// Only sync files whose path (relative to claudePath) matches one of these
+const SYNC_ALLOWLIST = [
+  /^settings\.json$/,
+  /^settings\.local\.json$/,
+  /^CLAUDE\.md$/i,
+  /^keybindings\.json$/,
+  /^skills\//,
+  /^plugins\//,   // plugins/cache already excluded above
+  /^agents\//,
+  /^commands\//,
+  /^memory\//,
+]
+
+const JUNK = [/\.DS_Store$/, /\.swp$/, /\.tmp$/, /~$/]
+
+function isAllowed(relPath) {
+  if (JUNK.some(re => re.test(relPath))) return false
+  return SYNC_ALLOWLIST.some(re => re.test(relPath))
 }
 
-export function startWatcher({ claudePath, deviceId, hashCache, api, chokidar }) {
+export function startWatcher({ claudePath, deviceId, hashCache, api, chokidar, saveHashCache }) {
   const timers = new Map()
 
   const watcher = chokidar.watch(claudePath, {
-    ignoreInitial: true,
+    ignoreInitial: false,
     persistent: true,
-    ignored: isIgnored,
+    ignored: (absPath) => CHOKIDAR_IGNORE.some(re => re.test(absPath)),
     awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   })
 
   async function handleChange(absPath, operation) {
-    if (isIgnored(absPath)) return
     const filePath = relative(claudePath, absPath)
+    if (!isAllowed(filePath)) return
 
     clearTimeout(timers.get(filePath))
     timers.set(filePath, setTimeout(async () => {
@@ -43,10 +56,12 @@ export function startWatcher({ claudePath, deviceId, hashCache, api, chokidar })
           if (hashCache.get(filePath) === hash) return
           hashCache.set(filePath, hash)
           await api.push({ deviceId, filePath, content, hash, operation: 'upsert' })
+          saveHashCache?.(hashCache)
           console.log(`[push] ${filePath}`)
         } else {
           hashCache.delete(filePath)
           await api.push({ deviceId, filePath, operation: 'delete' })
+          saveHashCache?.(hashCache)
           console.log(`[delete→push] ${filePath}`)
         }
       } catch (err) {
