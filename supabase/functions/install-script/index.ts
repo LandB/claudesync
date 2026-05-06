@@ -106,12 +106,18 @@ function generateBash(supabaseUrl: string, token: string): string {
     '  echo "Auto-start configured via shell rc (no systemd detected)"',
     'fi',
     '',
+    '# Write pull wrapper',
+    'PULL_BIN="$INSTALL_DIR/pull"',
+    'printf \'#!/usr/bin/env bash\\nCLAUDESYNC_CONFIG="%s" "%s" "%s/pull.js" "$@"\\n\' "$CONFIG_FILE" "$NODE_BIN" "$AGENT_DIR" > "$PULL_BIN"',
+    'chmod +x "$PULL_BIN"',
+    '',
     'echo ""',
     'echo "ClaudeSync agent installed!"',
     'echo "  Config:  $CONFIG_FILE"',
     'echo "  Agent:   $AGENT_BIN"',
     'echo ""',
-    'echo "Start manually: CLAUDESYNC_CONFIG=$CONFIG_FILE node $AGENT_BIN"',
+    'echo "Restore files from server:  $PULL_BIN"',
+    'echo "Start manually:             CLAUDESYNC_CONFIG=$CONFIG_FILE node $AGENT_BIN"',
   ].join('\n')
 }
 
@@ -168,9 +174,13 @@ function generatePowershell(supabaseUrl: string, token: string): string {
     'Register-ScheduledTask -TaskName "ClaudeSync Agent" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null',
     'Start-ScheduledTask -TaskName "ClaudeSync Agent"',
     '',
+    '$PullBin = "$InstallDir\\pull.ps1"',
+    'Set-Content -Path $PullBin -Value "$env:CLAUDESYNC_CONFIG = \'$ConfigFile\'`n& node \'$AgentDir\\pull.js\' @args"',
+    '',
     'Write-Host "ClaudeSync agent installed and started."',
     'Write-Host "  Config: $ConfigFile"',
     'Write-Host "  Agent:  $AgentBin"',
     'Write-Host "  Log:    $LogFile"',
+    'Write-Host "  Restore from server: powershell $PullBin"',
   ].join('\n')
 }
