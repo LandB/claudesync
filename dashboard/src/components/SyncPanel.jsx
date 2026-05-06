@@ -30,6 +30,14 @@ const s = {
   mscroll:   { overflowY:'auto', flex:1 },
   mop:       (op) => ({ fontSize:'0.68rem', padding:'1px 6px', borderRadius:'4px', fontFamily:'monospace', background: op==='delete' ? '#2d1212' : '#12202d', color: op==='delete' ? '#f87171' : '#60a5fa' }),
   mdev:      { fontSize:'0.75rem', color:'#555', fontFamily:'monospace' },
+  warn:      { fontSize:'0.8rem', color:'#fb923c', background:'#1c1007', border:'1px solid #78350f', borderRadius:'6px', padding:'0.6rem 0.75rem' },
+  ccard:     { background:'#1a1a1a', border:'1px solid #3f1515', borderRadius:'8px', padding:'0.85rem', marginBottom:'0.5rem' },
+  cpath:     { fontFamily:'monospace', color:'#f87171', fontSize:'0.85rem', fontWeight:'600', marginBottom:'0.4rem' },
+  crow:      { display:'flex', gap:'1rem', marginBottom:'0.4rem', flexWrap:'wrap' },
+  ccol:      { flex:1, minWidth:'120px' },
+  clabel:    { fontSize:'0.68rem', color:'#555', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'2px' },
+  cval:      { fontSize:'0.78rem', color:'#aaa', fontFamily:'monospace' },
+  resolveBtn:(disabled) => ({ marginTop:'0.5rem', padding:'4px 12px', borderRadius:'6px', fontSize:'0.78rem', cursor: disabled ? 'not-allowed' : 'pointer', background:'none', border:'1px solid #333', color: disabled ? '#444' : '#aaa', opacity: disabled ? 0.5 : 1 }),
 }
 
 function ago(ts) {
@@ -169,11 +177,96 @@ function PendingModal({ onClose }) {
   )
 }
 
+function ConflictModal({ pending, onClose }) {
+  const [conflicts, setConflicts] = useState(null)
+  const [devices, setDevices] = useState({})
+
+  async function load() {
+    const [cfRes, devRes] = await Promise.all([
+      supabase.from('conflict_log').select('*').eq('resolved', false).order('created_at', { ascending: false }).limit(100),
+      supabase.from('devices').select('id, name'),
+    ])
+    setConflicts(cfRes.data ?? [])
+    const map = {}
+    for (const d of devRes.data ?? []) map[d.id] = d.name
+    setDevices(map)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function resolve(id) {
+    if (pending > 0) return
+    await supabase.from('conflict_log').update({ resolved: true }).eq('id', id)
+    setConflicts(cs => cs.filter(c => c.id !== id))
+  }
+
+  async function resolveAll() {
+    if (pending > 0 || !conflicts?.length) return
+    const ids = conflicts.map(c => c.id)
+    await supabase.from('conflict_log').update({ resolved: true }).in('id', ids)
+    setConflicts([])
+  }
+
+  function truncate(str, n = 12) { return str ? str.slice(0, n) + '…' : '—' }
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.mhead}>
+          <span style={s.mtitle}>Unresolved conflicts</span>
+          <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+            {conflicts?.length > 0 &&
+              <button style={s.resolveBtn(pending > 0)} onClick={resolveAll} disabled={pending > 0}>
+                Resolve all
+              </button>
+            }
+            <button style={s.mclose} onClick={onClose}>✕</button>
+          </div>
+        </div>
+        <div style={s.mexplain}>
+          A <strong style={{ color:'#ccc' }}>conflict</strong> happens when the same file is modified on two devices before either syncs. ClaudeSync keeps the most recent version (winner) and discards the other (loser). Mark a conflict resolved once you've verified the right version won.
+        </div>
+        {pending > 0 &&
+          <div style={s.warn}>
+            {pending} pending change{pending > 1 ? 's' : ''} still in queue — wait for them to deliver before resolving conflicts to avoid re-triggering them.
+          </div>
+        }
+        <div style={s.mscroll}>
+          {conflicts === null && <div style={s.empty}>Loading…</div>}
+          {conflicts?.length === 0 && <div style={s.empty}>No unresolved conflicts.</div>}
+          {conflicts?.map(c => (
+            <div key={c.id} style={s.ccard}>
+              <div style={s.cpath}>{c.file_path}</div>
+              <div style={s.crow}>
+                <div style={s.ccol}>
+                  <div style={s.clabel}>Winner (kept)</div>
+                  <div style={s.cval}>{devices[c.winning_device] ?? truncate(c.winning_device)}</div>
+                  <div style={{ ...s.cval, color:'#555' }}>hash: {truncate(c.winning_hash)}</div>
+                </div>
+                <div style={s.ccol}>
+                  <div style={s.clabel}>Loser (discarded)</div>
+                  <div style={s.cval}>{devices[c.losing_device] ?? truncate(c.losing_device)}</div>
+                  <div style={{ ...s.cval, color:'#555' }}>hash: {truncate(c.losing_hash)}</div>
+                </div>
+              </div>
+              <div style={{ ...s.del, marginTop:'4px' }}>{ago(c.created_at)}</div>
+              <button style={s.resolveBtn(pending > 0)} onClick={() => resolve(c.id)} disabled={pending > 0}>
+                Mark resolved
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SyncPanel() {
   const [stats, setStats]       = useState({ files: 0, devices: 0, pending: 0, conflicts: 0 })
   const [recent, setRecent]     = useState([])
   const [expanded, setExpanded] = useState(new Set())
   const [showPending, setShowPending] = useState(false)
+  const [showConflicts, setShowConflicts] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -212,9 +305,8 @@ export default function SyncPanel() {
       <h2 style={s.h2}>Overview</h2>
       <div style={s.grid}>
         {[
-          { num: stats.files,     label: 'Synced files' },
-          { num: stats.devices,   label: 'Devices' },
-          { num: stats.conflicts, label: 'Unresolved conflicts' },
+          { num: stats.files,   label: 'Synced files' },
+          { num: stats.devices, label: 'Devices' },
         ].map(({ num, label }) => (
           <div key={label} style={s.stat}>
             <div style={s.num}>{num}</div>
@@ -226,9 +318,15 @@ export default function SyncPanel() {
           <div style={s.slbl}>Pending changes</div>
           <button style={s.infoBtn} onClick={() => setShowPending(true)} title="What are pending changes?">ℹ</button>
         </div>
+        <div style={s.stat}>
+          <div style={s.num}>{stats.conflicts}</div>
+          <div style={s.slbl}>Unresolved conflicts</div>
+          <button style={s.infoBtn} onClick={() => setShowConflicts(true)} title="View conflicts">ℹ</button>
+        </div>
       </div>
 
       {showPending && <PendingModal onClose={() => setShowPending(false)} />}
+      {showConflicts && <ConflictModal pending={stats.pending} onClose={() => setShowConflicts(false)} />}
 
       <h3 style={s.h3}>Recent activity</h3>
       {recent.length === 0
