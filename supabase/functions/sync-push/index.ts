@@ -40,7 +40,7 @@ serve(async (req) => {
   const storagePath = `${userId}/${file_path}`
 
   if (operation === 'upsert') {
-    if (!content_base64 || !hash) return errorResponse('Missing content_base64 or hash for upsert')
+    if (content_base64 === undefined || content_base64 === null || !hash) return errorResponse('Missing content_base64 or hash for upsert')
 
     const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0))
     const { error: uploadError } = await supabase.storage
