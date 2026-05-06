@@ -489,3 +489,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-snapshot/deno.json"
 entrypoint = "./functions/sync-snapshot/index.ts"
+
+[functions.sync-resync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-resync/deno.json"
+entrypoint = "./functions/sync-resync/index.ts"

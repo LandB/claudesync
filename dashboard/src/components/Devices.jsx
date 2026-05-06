@@ -12,7 +12,8 @@ const s = {
   name:    { fontWeight:'600', color:'#fff', fontSize:'0.95rem' },
   meta:    { color:'#666', fontSize:'0.8rem', marginTop:'2px', lineHeight:'1.6' },
   del:     { marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px', borderRadius:'4px' },
-  spinner: { color:'#444', fontSize:'0.8rem', marginTop:'0.5rem' },
+  pull:    { background:'none', border:'1px solid #252525', color:'#555', cursor:'pointer', fontSize:'0.75rem', padding:'3px 9px', borderRadius:'4px', marginTop:'0.4rem' },
+  pulling: { background:'none', border:'1px solid #252525', color:'#444', fontSize:'0.75rem', padding:'3px 9px', borderRadius:'4px', marginTop:'0.4rem', cursor:'default' },
 }
 
 function ago(ts) {
@@ -26,6 +27,7 @@ function ago(ts) {
 export default function Devices() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
+  const [resyncing, setResyncing] = useState({})
 
   async function load(initial = false) {
     if (initial) setLoading(true)
@@ -35,6 +37,12 @@ export default function Devices() {
       .order('last_seen_at', { ascending: false })
     setDevices(data ?? [])
     if (initial) setLoading(false)
+  }
+
+  async function resync(id) {
+    setResyncing(r => ({ ...r, [id]: true }))
+    await supabase.functions.invoke('sync-resync', { body: { device_id: id } })
+    setResyncing(r => ({ ...r, [id]: false }))
   }
 
   async function remove(id) {
@@ -76,6 +84,14 @@ export default function Devices() {
                 Last seen: {ago(d.last_seen_at)}<br />
                 <span style={{ color:'#444', fontSize:'0.75rem' }}>{d.id}</span>
               </div>
+              <button
+                style={resyncing[d.id] ? s.pulling : s.pull}
+                onClick={() => resync(d.id)}
+                disabled={!!resyncing[d.id]}
+                title="Queue all server files for delivery to this device"
+              >
+                {resyncing[d.id] ? 'Queuing…' : '↓ Pull from server'}
+              </button>
             </div>
             <button style={s.del} onClick={() => remove(d.id)} title="Remove device">✕</button>
           </div>
