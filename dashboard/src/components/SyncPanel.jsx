@@ -5,9 +5,10 @@ const s = {
   wrap:      { padding:'1.5rem 0' },
   h2:        { fontSize:'1.1rem', fontWeight:'600', color:'#fff', marginBottom:'1rem' },
   grid:      { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:'0.75rem', marginBottom:'1.5rem' },
-  stat:      { background:'#1a1a1a', border:'1px solid #252525', borderRadius:'8px', padding:'1rem' },
+  stat:      { background:'#1a1a1a', border:'1px solid #252525', borderRadius:'8px', padding:'1rem', position:'relative' },
   num:       { fontSize:'1.8rem', fontWeight:'700', color:'#a78bfa' },
   slbl:      { fontSize:'0.78rem', color:'#666', marginTop:'2px' },
+  infoBtn:   { position:'absolute', top:'0.6rem', right:'0.6rem', background:'none', border:'none', color:'#444', cursor:'pointer', fontSize:'0.8rem', lineHeight:1, padding:'2px 5px', borderRadius:'4px' },
   h3:        { fontSize:'0.95rem', fontWeight:'600', color:'#ccc', marginBottom:'0.75rem' },
   table:     { width:'100%', borderCollapse:'collapse', fontSize:'0.82rem' },
   th:        { textAlign:'left', color:'#555', padding:'0 0 0.5rem', borderBottom:'1px solid #1f1f1f', fontWeight:'500' },
@@ -20,6 +21,15 @@ const s = {
   badge:     { fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background:'#252525', color:'#666', fontFamily:'monospace' },
   chevron:   { fontSize:'0.65rem', color:'#555', width:'10px', display:'inline-block' },
   dimPath:   { fontFamily:'monospace', color:'#888', fontSize:'0.8rem' },
+  overlay:   { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' },
+  modal:     { background:'#141414', border:'1px solid #2a2a2a', borderRadius:'10px', padding:'1.5rem', width:'min(560px,90vw)', maxHeight:'80vh', display:'flex', flexDirection:'column', gap:'1rem' },
+  mhead:     { display:'flex', alignItems:'center', justifyContent:'space-between' },
+  mtitle:    { fontSize:'1rem', fontWeight:'600', color:'#fff' },
+  mclose:    { background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:'1.1rem', lineHeight:1 },
+  mexplain:  { fontSize:'0.83rem', color:'#888', lineHeight:'1.6', background:'#1a1a1a', border:'1px solid #252525', borderRadius:'6px', padding:'0.75rem' },
+  mscroll:   { overflowY:'auto', flex:1 },
+  mop:       (op) => ({ fontSize:'0.68rem', padding:'1px 6px', borderRadius:'4px', fontFamily:'monospace', background: op==='delete' ? '#2d1212' : '#12202d', color: op==='delete' ? '#f87171' : '#60a5fa' }),
+  mdev:      { fontSize:'0.75rem', color:'#555', fontFamily:'monospace' },
 }
 
 function ago(ts) {
@@ -99,10 +109,71 @@ function renderTree(node, depth, expanded, toggle) {
   return rows
 }
 
+function PendingModal({ onClose }) {
+  const [items, setItems] = useState(null)
+  const [devices, setDevices] = useState({})
+
+  useEffect(() => {
+    async function load() {
+      const [qRes, devRes] = await Promise.all([
+        supabase.from('change_queue').select('file_path, operation, target_device, created_at')
+          .eq('delivered', false).order('created_at', { ascending: false }).limit(100),
+        supabase.from('devices').select('id, name'),
+      ])
+      setItems(qRes.data ?? [])
+      const map = {}
+      for (const d of devRes.data ?? []) map[d.id] = d.name
+      setDevices(map)
+    }
+    load()
+  }, [])
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.mhead}>
+          <span style={s.mtitle}>Pending changes</span>
+          <button style={s.mclose} onClick={onClose}>✕</button>
+        </div>
+        <div style={s.mexplain}>
+          When a file changes on one device, ClaudeSync queues a delivery to every other registered device. <strong style={{ color:'#ccc' }}>Pending changes</strong> are queued deliveries that haven't been picked up yet — usually because the target device is offline. The count drops to zero once all devices sync.
+        </div>
+        <div style={s.mscroll}>
+          {items === null && <div style={s.empty}>Loading…</div>}
+          {items?.length === 0 && <div style={s.empty}>No pending changes.</div>}
+          {items?.length > 0 &&
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>File</th>
+                  <th style={s.th}>Op</th>
+                  <th style={s.th}>Target device</th>
+                  <th style={s.th}>Queued</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => (
+                  <tr key={i}>
+                    <td style={s.td}><span style={s.dimPath}>{item.file_path}</span></td>
+                    <td style={s.td}><span style={s.mop(item.operation)}>{item.operation}</span></td>
+                    <td style={s.td}><span style={s.mdev}>{devices[item.target_device] ?? item.target_device?.slice(0, 8)}</span></td>
+                    <td style={{ ...s.td, ...s.del }}>{ago(item.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SyncPanel() {
   const [stats, setStats]       = useState({ files: 0, devices: 0, pending: 0, conflicts: 0 })
   const [recent, setRecent]     = useState([])
   const [expanded, setExpanded] = useState(new Set())
+  const [showPending, setShowPending] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -143,7 +214,6 @@ export default function SyncPanel() {
         {[
           { num: stats.files,     label: 'Synced files' },
           { num: stats.devices,   label: 'Devices' },
-          { num: stats.pending,   label: 'Pending changes' },
           { num: stats.conflicts, label: 'Unresolved conflicts' },
         ].map(({ num, label }) => (
           <div key={label} style={s.stat}>
@@ -151,7 +221,14 @@ export default function SyncPanel() {
             <div style={s.slbl}>{label}</div>
           </div>
         ))}
+        <div style={s.stat}>
+          <div style={s.num}>{stats.pending}</div>
+          <div style={s.slbl}>Pending changes</div>
+          <button style={s.infoBtn} onClick={() => setShowPending(true)} title="What are pending changes?">ℹ</button>
+        </div>
       </div>
+
+      {showPending && <PendingModal onClose={() => setShowPending(false)} />}
 
       <h3 style={s.h3}>Recent activity</h3>
       {recent.length === 0
