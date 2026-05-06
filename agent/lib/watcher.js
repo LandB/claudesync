@@ -18,10 +18,7 @@ const SYNC_ALLOWLIST = [
   /^CLAUDE\.md$/i,
   /^keybindings\.json$/,
   /^skills\//,
-  /^plugins\//,   // plugins/cache already excluded above
-  /^agents\//,
-  /^commands\//,
-  /^memory\//,
+  /^plugins\//,   // plugins/cache already excluded by CHOKIDAR_IGNORE
 ]
 
 const JUNK = [/\.DS_Store$/, /\.swp$/, /\.tmp$/, /~$/]
