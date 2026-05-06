@@ -20,6 +20,7 @@ const SYNC_ALLOWLIST = [
   /^settings\.json$/,
   /^settings\.local\.json$/,
   /^CLAUDE\.md$/i,
+  /^\.caveman-active$/,
   /^keybindings\.json$/,
   /^skills\//,
   /^plugins\//,   // plugins/cache already excluded by CHOKIDAR_IGNORE

@@ -19,8 +19,7 @@ const s = {
   groupPath: { fontFamily:'monospace', color:'#e8e8e8', display:'flex', alignItems:'center', gap:'0.4rem' },
   badge:     { fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background:'#252525', color:'#666', fontFamily:'monospace' },
   chevron:   { fontSize:'0.65rem', color:'#555', width:'10px', display:'inline-block' },
-  childTd:   { padding:'0.3rem 0 0.3rem 1.4rem', borderBottom:'1px solid #161616', color:'#aaa', verticalAlign:'top' },
-  childPath: { fontFamily:'monospace', color:'#888', fontSize:'0.8rem' },
+  dimPath:   { fontFamily:'monospace', color:'#888', fontSize:'0.8rem' },
 }
 
 function ago(ts) {
@@ -30,40 +29,79 @@ function ago(ts) {
   return `${Math.floor(sec/3600)}h ago`
 }
 
-function groupFiles(files) {
-  const groups = new Map()
-  const standalone = []
-
+function buildTree(files) {
+  const root = { children: new Map(), files: [], latest: null }
   for (const f of files) {
     const parts = f.path.split('/')
-    if (parts[0] === 'plugins' && parts.length > 2) {
-      const key = `plugins/${parts[1]}`
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(f)
-    } else {
-      standalone.push({ type: 'file', file: f })
+    let node = root
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i]
+      if (!node.children.has(seg)) {
+        node.children.set(seg, { name: seg, path: parts.slice(0, i + 1).join('/'), children: new Map(), files: [], latest: null })
+      }
+      node = node.children.get(seg)
     }
+    node.files.push(f)
   }
+  function setLatest(node) {
+    let t = null
+    for (const f of node.files) if (!t || f.updated_at > t) t = f.updated_at
+    for (const c of node.children.values()) { const ct = setLatest(c); if (!t || (ct && ct > t)) t = ct }
+    node.latest = t
+    return t
+  }
+  setLatest(root)
+  return root
+}
 
+function countFiles(node) {
+  let n = node.files.length
+  for (const c of node.children.values()) n += countFiles(c)
+  return n
+}
+
+function renderTree(node, depth, expanded, toggle) {
   const rows = []
-  for (const [key, children] of groups) {
-    const latest = children.reduce((a, b) => a.updated_at > b.updated_at ? a : b)
-    rows.push({ type: 'group', key, children, latest })
-  }
-  for (const f of standalone) rows.push(f)
+  const indent = depth * 14
 
-  rows.sort((a, b) => {
-    const ta = a.type === 'group' ? a.latest.updated_at : a.file.updated_at
-    const tb = b.type === 'group' ? b.latest.updated_at : b.file.updated_at
-    return ta > tb ? -1 : 1
-  })
+  const dirs = [...node.children.values()].sort((a, b) => (b.latest ?? '') > (a.latest ?? '') ? 1 : -1)
+  const files = [...node.files].sort((a, b) => b.updated_at > a.updated_at ? 1 : -1)
+
+  for (const dir of dirs) {
+    const open = expanded.has(dir.path)
+    rows.push(
+      <tr key={dir.path} style={s.groupRow} onClick={() => toggle(dir.path)}>
+        <td style={s.td}>
+          <span style={{ ...s.groupPath, paddingLeft: indent }}>
+            <span style={s.chevron}>{open ? '▾' : '▸'}</span>
+            <span>{dir.name}/</span>
+            <span style={s.badge}>{countFiles(dir)}</span>
+          </span>
+        </td>
+        <td style={{ ...s.td, ...s.del }}>{ago(dir.latest)}</td>
+      </tr>
+    )
+    if (open) rows.push(...renderTree(dir, depth + 1, expanded, toggle))
+  }
+
+  for (const f of files) {
+    const name = depth > 0 ? f.path.split('/').pop() : f.path
+    rows.push(
+      <tr key={f.path}>
+        <td style={{ ...s.td, paddingLeft: indent || undefined }}>
+          <span style={depth > 0 ? s.dimPath : s.path}>{name}</span>
+        </td>
+        <td style={{ ...s.td, ...s.del }}>{ago(f.updated_at)}</td>
+      </tr>
+    )
+  }
 
   return rows
 }
 
 export default function SyncPanel() {
-  const [stats, setStats]     = useState({ files: 0, devices: 0, pending: 0, conflicts: 0 })
-  const [recent, setRecent]   = useState([])
+  const [stats, setStats]       = useState({ files: 0, devices: 0, pending: 0, conflicts: 0 })
+  const [recent, setRecent]     = useState([])
   const [expanded, setExpanded] = useState(new Set())
 
   useEffect(() => {
@@ -96,7 +134,7 @@ export default function SyncPanel() {
     })
   }
 
-  const rows = groupFiles(recent)
+  const tree = buildTree(recent)
 
   return (
     <div style={s.wrap}>
@@ -116,7 +154,7 @@ export default function SyncPanel() {
       </div>
 
       <h3 style={s.h3}>Recent activity</h3>
-      {rows.length === 0
+      {recent.length === 0
         ? <div style={s.empty}>No files synced yet.</div>
         : <table style={s.table}>
             <thead>
@@ -126,36 +164,7 @@ export default function SyncPanel() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => {
-                if (row.type === 'file') return (
-                  <tr key={row.file.path}>
-                    <td style={s.td}><span style={s.path}>{row.file.path}</span></td>
-                    <td style={{ ...s.td, ...s.del }}>{ago(row.file.updated_at)}</td>
-                  </tr>
-                )
-
-                const open = expanded.has(row.key)
-                return [
-                  <tr key={row.key} style={s.groupRow} onClick={() => toggle(row.key)}>
-                    <td style={s.td}>
-                      <span style={s.groupPath}>
-                        <span style={s.chevron}>{open ? '▾' : '▸'}</span>
-                        <span style={s.path}>{row.key}</span>
-                        <span style={s.badge}>{row.children.length}</span>
-                      </span>
-                    </td>
-                    <td style={{ ...s.td, ...s.del }}>{ago(row.latest.updated_at)}</td>
-                  </tr>,
-                  ...(open ? row.children.map(f => (
-                    <tr key={f.path}>
-                      <td style={s.childTd}>
-                        <span style={s.childPath}>{f.path.split('/').slice(2).join('/')}</span>
-                      </td>
-                      <td style={{ ...s.childTd, ...s.del }}>{ago(f.updated_at)}</td>
-                    </tr>
-                  )) : [])
-                ]
-              })}
+              {renderTree(tree, 0, expanded, toggle)}
             </tbody>
           </table>
       }
