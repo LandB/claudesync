@@ -22,6 +22,7 @@ export default function TokenPanel() {
   const [url, setUrl] = useState('')
   const [copied, setCopied] = useState(false)
   const [copiedInstall, setCopiedInstall] = useState(false)
+  const [copiedWin, setCopiedWin] = useState(false)
   const [copiedMcp, setCopiedMcp] = useState(false)
   const [msg, setMsg] = useState(null)
   const [confirming, setConfirming] = useState(false)
@@ -50,6 +51,9 @@ export default function TokenPanel() {
   const installCmd = token
     ? `curl -fsSL "${url}/functions/v1/install-script?token=${token}" | bash`
     : ''
+  const winInstallCmd = token
+    ? `$tmp="$env:TEMP\\cs-install.ps1"; irm "${url}/functions/v1/install-script?token=${token}&platform=win" -OutFile $tmp; & $tmp`
+    : ''
   const mcpCmd = token
     ? `claude mcp add --transport http claudesync \\\n  ${url}/functions/v1/mcp \\\n  --header 'Authorization: Bearer ${token}' \\\n  --scope user`
     : ''
@@ -71,13 +75,22 @@ export default function TokenPanel() {
       </div>
 
       <div style={s.install}>
-        <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.5rem' }}>Install Agent</div>
+        <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.5rem' }}>Install Agent — macOS / Linux</div>
         <div style={s.codeWrap}>
           <div style={s.code}>{installCmd}</div>
           <button style={s.cpyBtn(copiedInstall)} onClick={() => {
             navigator.clipboard.writeText(installCmd)
             setCopiedInstall(true); setTimeout(() => setCopiedInstall(false), 2000)
           }}>{copiedInstall ? '✓' : '⎘'}</button>
+        </div>
+
+        <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Install Agent — Windows (PowerShell, run as Administrator)</div>
+        <div style={s.codeWrap}>
+          <div style={s.code}>{winInstallCmd}</div>
+          <button style={s.cpyBtn(copiedWin)} onClick={() => {
+            navigator.clipboard.writeText(winInstallCmd)
+            setCopiedWin(true); setTimeout(() => setCopiedWin(false), 2000)
+          }}>{copiedWin ? '✓' : '⎘'}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Add MCP to Claude Code</div>
