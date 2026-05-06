@@ -12,6 +12,7 @@ const s = {
   name:    { fontWeight:'600', color:'#fff', fontSize:'0.95rem' },
   meta:    { color:'#666', fontSize:'0.8rem', marginTop:'2px', lineHeight:'1.6' },
   del:     { marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px', borderRadius:'4px' },
+  spinner: { color:'#444', fontSize:'0.8rem', marginTop:'0.5rem' },
 }
 
 function ago(ts) {
@@ -26,24 +27,32 @@ export default function Devices() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
 
-  async function load() {
-    setLoading(true)
+  async function load(initial = false) {
+    if (initial) setLoading(true)
     const { data } = await supabase
       .from('devices')
       .select('*')
       .order('last_seen_at', { ascending: false })
     setDevices(data ?? [])
-    setLoading(false)
+    if (initial) setLoading(false)
   }
 
   async function remove(id) {
+    const device = devices.find(d => d.id === id)
     await supabase.from('devices').delete().eq('id', id)
+    if (device) {
+      await supabase.from('device_blocklist').insert({
+        user_id: device.user_id,
+        mac_address: device.mac_address ?? null,
+        hostname: device.hostname,
+      })
+    }
     setDevices(d => d.filter(x => x.id !== id))
   }
 
   useEffect(() => {
-    load()
-    const t = setInterval(load, 30_000)
+    load(true)
+    const t = setInterval(() => load(false), 30_000)
     return () => clearInterval(t)
   }, [])
 
@@ -51,11 +60,11 @@ export default function Devices() {
     <div style={s.wrap}>
       <div style={s.head}>
         <h2 style={s.h2}>Devices ({devices.length})</h2>
-        <button style={s.refresh} onClick={load}>↻ Refresh</button>
+        <button style={s.refresh} onClick={() => load(true)}>↻ Refresh</button>
       </div>
       {loading && <div style={s.empty}>Loading…</div>}
       {!loading && devices.length === 0 && <div style={s.empty}>No devices. Install the agent on a machine to get started.</div>}
-      {devices.map(d => {
+      {!loading && devices.map(d => {
         const online = (Date.now() - new Date(d.last_seen_at).getTime()) < 90_000
         return (
           <div key={d.id} style={s.device}>

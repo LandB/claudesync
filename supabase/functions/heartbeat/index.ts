@@ -13,24 +13,82 @@ serve(async (req) => {
   const userId = await validateToken(req, supabase)
   if (!userId) return unauthorizedResponse()
 
-  const { name, hostname, platform, claude_path, agent_version } = await req.json()
+  const { name, hostname, platform, claude_path, agent_version, mac_address } = await req.json()
   if (!hostname || !platform || !claude_path) return errorResponse('Missing required fields')
 
-  const { data, error } = await supabase
-    .from('devices')
-    .upsert({
-      user_id: userId,
-      name: name ?? hostname,
-      hostname,
-      platform,
-      claude_path,
-      agent_version: agent_version ?? '1.0.0',
-      last_seen_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,hostname' })
+  // Check blocklist
+  const blockQuery = supabase
+    .from('device_blocklist')
     .select('id')
-    .single()
+    .eq('user_id', userId)
 
-  if (error) return errorResponse(error.message, 500)
+  const { data: blocked } = mac_address
+    ? await blockQuery.or(`mac_address.eq.${mac_address},hostname.eq.${hostname}`).maybeSingle()
+    : await blockQuery.eq('hostname', hostname).maybeSingle()
 
-  return okResponse({ ok: true, device_id: data.id })
+  if (blocked) return errorResponse('Device is blocked', 403)
+
+  let data: { id: string } | null = null
+  let error: unknown = null
+
+  if (mac_address) {
+    const { data: existing } = await supabase
+      .from('devices')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('mac_address', mac_address)
+      .maybeSingle()
+
+    if (existing) {
+      const res = await supabase
+        .from('devices')
+        .update({
+          name: name ?? hostname,
+          hostname,
+          platform,
+          claude_path,
+          agent_version: agent_version ?? '1.0.0',
+          last_seen_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select('id')
+        .single()
+      data = res.data; error = res.error
+    } else {
+      const res = await supabase
+        .from('devices')
+        .insert({
+          user_id: userId,
+          name: name ?? hostname,
+          hostname,
+          platform,
+          claude_path,
+          mac_address,
+          agent_version: agent_version ?? '1.0.0',
+          last_seen_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+      data = res.data; error = res.error
+    }
+  } else {
+    const res = await supabase
+      .from('devices')
+      .upsert({
+        user_id: userId,
+        name: name ?? hostname,
+        hostname,
+        platform,
+        claude_path,
+        agent_version: agent_version ?? '1.0.0',
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,hostname' })
+      .select('id')
+      .single()
+    data = res.data; error = res.error
+  }
+
+  if (error) return errorResponse((error as Error).message, 500)
+
+  return okResponse({ ok: true, device_id: data!.id })
 })

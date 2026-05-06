@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 process.title = 'claudesync-agent'
-import { hostname, platform } from 'os'
+import { hostname, platform, networkInterfaces } from 'os'
 import { createClient } from '@supabase/supabase-js'
 import chokidar from 'chokidar'
 import { loadConfig } from './lib/config.js'
@@ -10,6 +10,16 @@ import { startWatcher } from './lib/watcher.js'
 import { loadHashCache, saveHashCache } from './lib/hash-cache.js'
 
 const POLL_INTERVAL_MS = 30_000
+
+function getMacAddress() {
+  const nets = networkInterfaces()
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (!net.internal && net.mac && net.mac !== '00:00:00:00:00:00') return net.mac
+    }
+  }
+  return null
+}
 
 async function pullAndApply({ api, deviceId, claudePath, hashCache }) {
   try {
@@ -36,6 +46,7 @@ async function main() {
     platform: platform(),
     claudePath,
     name: config.name ?? hostname(),
+    macAddress: getMacAddress(),
   })
   console.log(`[startup] device_id: ${deviceId}`)
 
