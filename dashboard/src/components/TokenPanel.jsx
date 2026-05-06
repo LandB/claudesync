@@ -23,6 +23,8 @@ export default function TokenPanel() {
   const [copied, setCopied] = useState(false)
   const [copiedInstall, setCopiedInstall] = useState(false)
   const [copiedWin, setCopiedWin] = useState(false)
+  const [copiedStartUnix, setCopiedStartUnix] = useState(false)
+  const [copiedStartWin, setCopiedStartWin] = useState(false)
   const [copiedMcp, setCopiedMcp] = useState(false)
   const [msg, setMsg] = useState(null)
   const [confirming, setConfirming] = useState(false)
@@ -91,6 +93,24 @@ export default function TokenPanel() {
             navigator.clipboard.writeText(winInstallCmd)
             setCopiedWin(true); setTimeout(() => setCopiedWin(false), 2000)
           }}>{copiedWin ? '✓' : '⎘'}</button>
+        </div>
+
+        <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Start Agent — macOS / Linux</div>
+        <div style={s.codeWrap}>
+          <div style={s.code}>{'# macOS\nlaunchctl start com.claudesync.agent\n# Linux\nsystemctl --user start claudesync.service'}</div>
+          <button style={s.cpyBtn(copiedStartUnix)} onClick={() => {
+            navigator.clipboard.writeText('launchctl start com.claudesync.agent')
+            setCopiedStartUnix(true); setTimeout(() => setCopiedStartUnix(false), 2000)
+          }}>{copiedStartUnix ? '✓' : '⎘'}</button>
+        </div>
+
+        <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Start Agent — Windows (PowerShell)</div>
+        <div style={s.codeWrap}>
+          <div style={s.code}>{'Start-ScheduledTask -TaskName "ClaudeSync Agent"'}</div>
+          <button style={s.cpyBtn(copiedStartWin)} onClick={() => {
+            navigator.clipboard.writeText('Start-ScheduledTask -TaskName "ClaudeSync Agent"')
+            setCopiedStartWin(true); setTimeout(() => setCopiedStartWin(false), 2000)
+          }}>{copiedStartWin ? '✓' : '⎘'}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Add MCP to Claude Code</div>
