@@ -140,13 +140,33 @@ export default function FileEditor() {
   function discard() { setContent(original); setMsg(null); setConfirmDeleteAll(false) }
   const dirty = content !== original
 
+  function groupedFiles() {
+    const root = []
+    const groups = new Map()
+    for (const f of files) {
+      const slash = f.path.indexOf('/')
+      if (slash === -1) { root.push(f); continue }
+      const folder = f.path.slice(0, slash)
+      if (!groups.has(folder)) groups.set(folder, [])
+      groups.get(folder).push(f)
+    }
+    return { root, groups }
+  }
+
   return (
     <div style={s.wrap}>
       <div style={s.head}>
         <h2 style={s.h2}>Files</h2>
         {files.length > 0 && <>
           <select style={s.sel} value={selected?.path ?? ''} onChange={e => selectFile(files.find(f => f.path === e.target.value))}>
-            {files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
+            {(() => { const { root, groups } = groupedFiles(); return [
+              ...root.map(f => <option key={f.path} value={f.path}>{f.path}</option>),
+              ...[...groups.entries()].map(([folder, gfiles]) => (
+                <optgroup key={folder} label={folder + '/'}>
+                  {gfiles.map(f => <option key={f.path} value={f.path}>{f.path.slice(folder.length + 1)}</option>)}
+                </optgroup>
+              ))
+            ]})()}
           </select>
           {selected && <span style={s.badge}>{(selected.size_bytes / 1024).toFixed(1)} KB</span>}
         </>}
