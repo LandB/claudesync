@@ -41,11 +41,11 @@ export default function Devices() {
     const device = devices.find(d => d.id === id)
     await supabase.from('devices').delete().eq('id', id)
     if (device) {
-      await supabase.from('device_blocklist').insert({
+      await supabase.from('device_blocklist').upsert({
         user_id: device.user_id,
         mac_address: device.mac_address ?? null,
         hostname: device.hostname,
-      })
+      }, { onConflict: 'user_id,hostname', ignoreDuplicates: true })
     }
     setDevices(d => d.filter(x => x.id !== id))
   }
