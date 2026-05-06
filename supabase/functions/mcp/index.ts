@@ -122,9 +122,26 @@ const TOOLS = [
   },
 ]
 
+const SYNC_ALLOWLIST = [
+  /^settings\.json$/,
+  /^settings\.local\.json$/,
+  /^CLAUDE\.md$/i,
+  /^keybindings\.json$/,
+  /^skills\//,
+  /^plugins\//,
+  /^agents\//,
+  /^commands\//,
+  /^memory\//,
+]
+
+function isPathAllowed(filePath: string): boolean {
+  return SYNC_ALLOWLIST.some(re => re.test(filePath))
+}
+
 async function handleSyncPush(userId: string, args: Record<string,string>, supabase: SupabaseClient) {
   const { device_id, file_path, content, operation } = args
   if (!device_id || !file_path || !operation) return toolErr('Missing required fields')
+  if (!isPathAllowed(file_path)) return toolErr(`Path not allowed: ${file_path}`)
   const storagePath = `${userId}/${file_path}`
 
   if (operation === 'upsert') {
