@@ -159,7 +159,7 @@ function generatePowershell(supabaseUrl: string, token: string): string {
     '',
     '# VBScript launcher — runs node hidden (no visible cmd window)',
     '$WrapperVbs = "$AgentDir\\start.vbs"',
-    '$vbsContent = "Set ws = CreateObject(""WScript.Shell"")" + [char]13 + [char]10 + "ws.Run ""cmd /c set CLAUDESYNC_CONFIG=$ConfigFile && node """"$AgentBin"""" >> """"$LogFile"""" 2>&1"", 0, False"',
+    '$vbsContent = "Set ws = CreateObject(""WScript.Shell"")" + [char]13 + [char]10 + "ws.Environment(""Process"")(""CLAUDESYNC_CONFIG"") = ""$ConfigFile""" + [char]13 + [char]10 + "ws.Run ""node """"$AgentBin"""" >> """"$LogFile"""" 2>&1"", 0, False"',
     'Set-Content -Path $WrapperVbs -Value $vbsContent',
     '',
     '$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$WrapperVbs`"" -WorkingDirectory $AgentDir',
