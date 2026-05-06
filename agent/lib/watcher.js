@@ -9,6 +9,10 @@ const CHOKIDAR_IGNORE = [
   /[/\\]plugins[/\\]cache([/\\]|$)/,
   /[/\\]projects([/\\]|$)/,
   /[/\\]statsig([/\\]|$)/,
+  /[/\\]sessions([/\\]|$)/,
+  /[/\\]cache([/\\]|$)/,
+  /[/\\]backups([/\\]|$)/,
+  /[/\\]ide([/\\]|$)/,
 ]
 
 // Only sync files whose path (relative to claudePath) matches one of these
