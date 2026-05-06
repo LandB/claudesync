@@ -483,3 +483,9 @@ entrypoint = "./functions/refresh-plugins/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/refresh-plugins/*.html" ]
+
+[functions.sync-snapshot]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sync-snapshot/deno.json"
+entrypoint = "./functions/sync-snapshot/index.ts"
