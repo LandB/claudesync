@@ -1,9 +1,23 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { validateToken, unauthorizedResponse, errorResponse, okResponse } from '../_shared/auth.ts'
+import { validateToken } from '../_shared/auth.ts'
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS },
+  })
+}
 
 serve(async (req) => {
-  if (req.method !== 'POST') return errorResponse('Method not allowed', 405)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -11,12 +25,11 @@ serve(async (req) => {
   )
 
   const userId = await validateToken(req, supabase)
-  if (!userId) return unauthorizedResponse()
+  if (!userId) return json({ error: 'Unauthorized' }, 401)
 
   const { device_id } = await req.json()
-  if (!device_id) return errorResponse('Missing device_id')
+  if (!device_id) return json({ error: 'Missing device_id' }, 400)
 
-  // Verify device belongs to user
   const { data: device } = await supabase
     .from('devices')
     .select('id')
@@ -24,7 +37,7 @@ serve(async (req) => {
     .eq('user_id', userId)
     .single()
 
-  if (!device) return errorResponse('Device not found', 404)
+  if (!device) return json({ error: 'Device not found' }, 404)
 
   const { data: files, error } = await supabase
     .from('sync_files')
@@ -32,8 +45,8 @@ serve(async (req) => {
     .eq('user_id', userId)
     .eq('deleted', false)
 
-  if (error) return errorResponse(error.message, 500)
-  if (!files || files.length === 0) return okResponse({ queued: 0 })
+  if (error) return json({ error: error.message }, 500)
+  if (!files || files.length === 0) return json({ queued: 0 })
 
   // Clear existing undelivered items for this device to avoid duplicates
   await supabase
@@ -55,7 +68,7 @@ serve(async (req) => {
     .from('change_queue')
     .insert(entries)
 
-  if (insertError) return errorResponse(insertError.message, 500)
+  if (insertError) return json({ error: insertError.message }, 500)
 
-  return okResponse({ queued: entries.length })
+  return json({ queued: entries.length })
 })
