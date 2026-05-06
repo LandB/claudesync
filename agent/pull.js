@@ -4,7 +4,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { loadConfig } from './lib/config.js'
 import { loadHashCache, saveHashCache } from './lib/hash-cache.js'
-import { normalizePluginPaths } from './lib/normalize-plugin-paths.js'
+import { expandPluginPaths, isRegistryFile } from './lib/sanitize-plugin-paths.js'
 
 const configPath = process.env.CLAUDESYNC_CONFIG
 const config = loadConfig(configPath)
@@ -34,7 +34,9 @@ async function main() {
   for (const f of files) {
     const absPath = join(claudePath, f.path)
 
-    if (localHash(absPath) === f.hash) {
+    // Registry files are stored sanitized on the server but expanded locally,
+    // so hashes never match — always re-apply them.
+    if (!isRegistryFile(f.path) && localHash(absPath) === f.hash) {
       hashCache.set(f.path, f.hash)
       skipped++
       continue
@@ -53,7 +55,7 @@ async function main() {
       continue
     }
 
-    const content = normalizePluginPaths(f.path, Buffer.from(await res.arrayBuffer()), claudePath)
+    const content = expandPluginPaths(f.path, Buffer.from(await res.arrayBuffer()), claudePath)
     mkdirSync(dirname(absPath), { recursive: true })
     writeFileSync(absPath, content)
     hashCache.set(f.path, f.hash)
