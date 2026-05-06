@@ -7,6 +7,7 @@ const CHOKIDAR_IGNORE = [
   /[/\\]\.git([/\\]|$)/,
   /[/\\]node_modules([/\\]|$)/,
   /[/\\]plugins[/\\]cache([/\\]|$)/,
+  /[/\\]plugins[/\\]marketplaces([/\\]|$)/,  // managed by Claude Code, not ours to sync
   /[/\\]projects([/\\]|$)/,
   /[/\\]statsig([/\\]|$)/,
   /[/\\]sessions([/\\]|$)/,

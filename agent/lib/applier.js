@@ -1,7 +1,20 @@
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
 
+const APPLY_BLOCKLIST = [
+  /^plugins[/\\]marketplaces([/\\]|$)/,
+  /^plugins[/\\]cache([/\\]|$)/,
+]
+
+function isBlocked(filePath) {
+  return APPLY_BLOCKLIST.some(re => re.test(filePath))
+}
+
 export async function applyChange(item, claudePath, hashCache) {
+  if (isBlocked(item.file_path)) {
+    console.log(`[skip] blocked path: ${item.file_path}`)
+    return
+  }
   const absPath = join(claudePath, item.file_path)
 
   if (item.operation === 'delete') {
