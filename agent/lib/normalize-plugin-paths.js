@@ -1,4 +1,4 @@
-import { join, sep } from 'path'
+import { join } from 'path'
 
 /**
  * Rewrites absolute ~/.claude/* paths in plugin registry files to match the
@@ -28,11 +28,11 @@ export function normalizePluginPaths(filePath, content, claudePath) {
       for (const entries of Object.values(data.plugins ?? {})) {
         for (const entry of entries) {
           if (entry.installPath) {
-            // Extract the relative portion starting at "plugins/cache/…"
-            const marker = `plugins${sep}cache`
-            const idx = entry.installPath.lastIndexOf(marker)
-            if (idx >= 0) {
-              entry.installPath = join(claudePath, entry.installPath.slice(idx))
+            // Match "plugins/cache/" or "plugins\cache\" from either OS
+            const match = entry.installPath.match(/[/\\]plugins[/\\]cache[/\\](.+)$/)
+            if (match) {
+              const parts = match[1].split(/[/\\]/)
+              entry.installPath = join(claudePath, 'plugins', 'cache', ...parts)
             }
           }
         }
