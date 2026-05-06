@@ -160,8 +160,9 @@ function generatePowershell(supabaseUrl: string, token: string): string {
     '$trigger = New-ScheduledTaskTrigger -AtLogOn',
     '$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0',
     'Register-ScheduledTask -TaskName "ClaudeSync Agent" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null',
+    'Start-ScheduledTask -TaskName "ClaudeSync Agent"',
     '',
-    'Write-Host "ClaudeSync agent installed."',
+    'Write-Host "ClaudeSync agent installed and started."',
     'Write-Host "  Config: $ConfigFile"',
     'Write-Host "  Agent:  $AgentBin"',
   ].join('\n')
