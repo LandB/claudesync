@@ -41,7 +41,11 @@ export default function Devices() {
     setDevices(d => d.filter(x => x.id !== id))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 30_000)
+    return () => clearInterval(t)
+  }, [])
 
   return (
     <div style={s.wrap}>

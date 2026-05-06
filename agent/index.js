@@ -77,7 +77,7 @@ async function main() {
         claudePath,
         name: config.name ?? hostname(),
       })
-    } catch { /* non-fatal */ }
+    } catch (err) { console.error('[heartbeat error]', err.message) }
   }, POLL_INTERVAL_MS)
 
   console.log('[ready] ClaudeSync agent running')
