@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LuChevronDown, LuChevronRight, LuX, LuInfo } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -91,7 +92,7 @@ function renderTree(node, depth, expanded, toggle) {
       <tr key={dir.path} style={s.groupRow} onClick={() => toggle(dir.path)}>
         <td style={s.td}>
           <span style={{ ...s.groupPath, paddingLeft: indent }}>
-            <span style={s.chevron}>{open ? '▾' : '▸'}</span>
+            <span style={s.chevron}>{open ? <LuChevronDown size={11} /> : <LuChevronRight size={11} />}</span>
             <span>{dir.name}/</span>
             <span style={s.badge}>{countFiles(dir)}</span>
           </span>
@@ -141,7 +142,7 @@ function PendingModal({ onClose }) {
       <div style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.mhead}>
           <span style={s.mtitle}>Pending changes</span>
-          <button style={s.mclose} onClick={onClose}>✕</button>
+          <button style={s.mclose} onClick={onClose}><LuX size={15} /></button>
         </div>
         <div style={s.mexplain}>
           When a file changes on one device, ClaudeSync queues a delivery to every other registered device. <strong style={{ color:'#ccc' }}>Pending changes</strong> are queued deliveries that haven't been picked up yet — usually because the target device is offline. The count drops to zero once all devices sync.
@@ -220,7 +221,7 @@ function ConflictModal({ pending, onClose }) {
                 Resolve all
               </button>
             }
-            <button style={s.mclose} onClick={onClose}>✕</button>
+            <button style={s.mclose} onClick={onClose}><LuX size={15} /></button>
           </div>
         </div>
         <div style={s.mexplain}>
@@ -313,7 +314,7 @@ export default function SyncPanel() {
         <div style={s.stat}>
           <div style={s.num}>{stats.conflicts}</div>
           <div style={s.slbl}>Unresolved conflicts</div>
-          <button style={s.infoBtn} onClick={() => setShowConflicts(true)} title="View conflicts">ℹ</button>
+          <button style={s.infoBtn} onClick={() => setShowConflicts(true)} title="View conflicts"><LuInfo size={13} /></button>
         </div>
       </div>
 

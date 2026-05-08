@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LuCheck, LuCopy } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -67,7 +68,7 @@ export default function TokenPanel() {
         <div style={s.label}>Bearer Token</div>
         <div style={s.tok}>{token ?? 'Loading…'}</div>
         <div style={s.row}>
-          <button style={s.btn(false)} onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+          <button style={{ ...s.btn(false), display:'inline-flex', alignItems:'center', gap:'5px' }} onClick={copy}>{copied ? <><LuCheck size={13} />Copied</> : 'Copy'}</button>
           {confirming
             ? <button style={s.btn(true)} onClick={regenerate}>Confirm regenerate?</button>
             : <button style={s.btn(false)} onClick={regenerate}>Regenerate</button>
@@ -83,7 +84,7 @@ export default function TokenPanel() {
           <button style={s.cpyBtn(copiedInstall)} onClick={() => {
             navigator.clipboard.writeText(installCmd)
             setCopiedInstall(true); setTimeout(() => setCopiedInstall(false), 2000)
-          }}>{copiedInstall ? '✓' : '⎘'}</button>
+          }}>{copiedInstall ? <LuCheck size={12} /> : <LuCopy size={12} />}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Install Agent — Windows (PowerShell, run as Administrator)</div>
@@ -92,7 +93,7 @@ export default function TokenPanel() {
           <button style={s.cpyBtn(copiedWin)} onClick={() => {
             navigator.clipboard.writeText(winInstallCmd)
             setCopiedWin(true); setTimeout(() => setCopiedWin(false), 2000)
-          }}>{copiedWin ? '✓' : '⎘'}</button>
+          }}>{copiedWin ? <LuCheck size={12} /> : <LuCopy size={12} />}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Start Agent — macOS / Linux</div>
@@ -101,7 +102,7 @@ export default function TokenPanel() {
           <button style={s.cpyBtn(copiedStartUnix)} onClick={() => {
             navigator.clipboard.writeText('launchctl start com.claudesync.agent')
             setCopiedStartUnix(true); setTimeout(() => setCopiedStartUnix(false), 2000)
-          }}>{copiedStartUnix ? '✓' : '⎘'}</button>
+          }}>{copiedStartUnix ? <LuCheck size={12} /> : <LuCopy size={12} />}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Start Agent — Windows (PowerShell)</div>
@@ -110,7 +111,7 @@ export default function TokenPanel() {
           <button style={s.cpyBtn(copiedStartWin)} onClick={() => {
             navigator.clipboard.writeText('Start-ScheduledTask -TaskName "ClaudeSync Agent"')
             setCopiedStartWin(true); setTimeout(() => setCopiedStartWin(false), 2000)
-          }}>{copiedStartWin ? '✓' : '⎘'}</button>
+          }}>{copiedStartWin ? <LuCheck size={12} /> : <LuCopy size={12} />}</button>
         </div>
 
         <div style={{ ...s.label, marginBottom:'0.5rem', marginTop:'1.25rem' }}>Add MCP to Claude Code</div>
@@ -119,7 +120,7 @@ export default function TokenPanel() {
           <button style={s.cpyBtn(copiedMcp)} onClick={() => {
             navigator.clipboard.writeText(mcpCmd.replace(/\\\n\s+/g, ' '))
             setCopiedMcp(true); setTimeout(() => setCopiedMcp(false), 2000)
-          }}>{copiedMcp ? '✓' : '⎘'}</button>
+          }}>{copiedMcp ? <LuCheck size={12} /> : <LuCopy size={12} />}</button>
         </div>
       </div>
     </div>

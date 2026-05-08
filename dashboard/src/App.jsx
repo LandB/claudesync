@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import { LuLayoutDashboard, LuMonitor, LuFiles, LuPuzzle, LuTriangleAlert, LuKeyRound } from 'react-icons/lu'
+import { LuLayoutDashboard, LuMonitor, LuFiles, LuPuzzle, LuTriangleAlert, LuKeyRound, LuRefreshCw } from 'react-icons/lu'
 import { supabase } from './supabase'
 import AuthScreen    from './components/AuthScreen'
 import Devices       from './components/Devices'
@@ -52,7 +52,7 @@ export default function App() {
   return (
     <div style={s.app}>
       <aside style={s.side}>
-        <div style={s.logo}>⟳ ClaudeSync</div>
+        <div style={{ ...s.logo, display:'flex', alignItems:'center', gap:'6px' }}><LuRefreshCw size={14} />ClaudeSync</div>
         <nav style={s.nav}>
           {NAV.map(({ to, label, Icon }) => (
             <NavLink key={to} to={to} end={to === '/'} style={s.item}>

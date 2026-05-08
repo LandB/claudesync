@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LuRefreshCw } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -79,7 +80,7 @@ export default function ConflictLog() {
           <button style={s.btn} onClick={() => setShowResolved(v => !v)}>
             {showResolved ? 'Hide resolved' : 'Show resolved'}
           </button>
-          <button style={s.btn} onClick={load}>↻</button>
+          <button style={s.btn} onClick={load}><LuRefreshCw size={14} /></button>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LuRefreshCw, LuArrowLeft } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -48,7 +49,7 @@ export default function AuthScreen() {
     <div style={s.wrap}>
       <div style={s.card}>
         <div style={s.logo}>
-          <div style={s.title}>⟳ ClaudeSync</div>
+          <div style={{ ...s.title, display:'flex', alignItems:'center', justifyContent:'center', gap:'10px' }}><LuRefreshCw size={26} />ClaudeSync</div>
           <div style={s.sub}>Keep your Claude Code environment in sync</div>
         </div>
 
@@ -72,7 +73,9 @@ export default function AuthScreen() {
           {mode === 'signup' ? 'Already have an account? Sign in' : 'No account? Sign up'}
         </button>
         <button style={{ ...s.toggle, color:'#555', marginTop:'0.25rem' }} onClick={() => { setMode(m => m === 'magic' ? 'signin' : 'magic'); setMsg(null) }}>
-          {mode === 'magic' ? '← Back to password login' : 'Sign in with magic link'}
+          {mode === 'magic'
+            ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuArrowLeft size={13} />Back to password login</span>
+            : 'Sign in with magic link'}
         </button>
       </div>
     </div>

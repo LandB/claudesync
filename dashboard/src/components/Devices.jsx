@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LuSearch, LuDownload, LuRotateCcw, LuX, LuCheck, LuChevronDown, LuChevronRight, LuUpload, LuRefreshCw } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -95,7 +96,7 @@ function renderDiffTree(node, depth, expanded, toggle, selected, onTogglePath, o
               onClick={e => e.stopPropagation()}
             />
             <span onClick={() => toggle(dir.path)}>
-              <span style={s.chevron}>{open ? '▾' : '▸'}</span>
+              <span style={s.chevron}>{open ? <LuChevronDown size={11} /> : <LuChevronRight size={11} />}</span>
               <span>{dir.name}/</span>
               <span style={s.treeBadge}>{countDiffs(dir)}</span>
             </span>
@@ -224,7 +225,7 @@ function PendingPanel({ device, onSyncDone }) {
           onClick={sync}
           disabled={!selected.size || syncing}
         >
-          {syncing ? 'Syncing…' : `↑ Sync ${selected.size} file${selected.size !== 1 ? 's' : ''} to server`}
+          {syncing ? 'Syncing…' : <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuUpload size={11} />Sync {selected.size} file{selected.size !== 1 ? 's' : ''} to server</span>}
         </button>
       </div>
     </div>
@@ -332,7 +333,7 @@ export default function Devices() {
     <div style={s.wrap}>
       <div style={s.head}>
         <h2 style={s.h2}>Devices ({devices.length})</h2>
-        <button style={s.refresh} onClick={() => load(true)}>↻ Refresh</button>
+        <button style={{ ...s.refresh, display:'inline-flex', alignItems:'center', gap:'5px' }} onClick={() => load(true)}><LuRefreshCw size={13} />Refresh</button>
       </div>
       {loading && <div style={s.empty}>Loading…</div>}
       {!loading && devices.length === 0 && <div style={s.empty}>No devices. Install the agent on a machine to get started.</div>}
@@ -350,7 +351,7 @@ export default function Devices() {
                   {d.hostname} · {d.platform} · v{d.agent_version}<br />
                   Last seen: {ago(d.last_seen_at)}<br />
                   {state === 'unchecked' && <span style={s.notChecked}>Not checked</span>}
-                  {state === 'synced' && <span style={s.upToDate}>✓ Up to date · checked {ago(d.last_discovered_at)}</span>}
+                  {state === 'synced' && <span style={{ ...s.upToDate, display:'inline-flex', alignItems:'center', gap:'3px' }}><LuCheck size={12} />Up to date · checked {ago(d.last_discovered_at)}</span>}
                   {state === 'pending' && <span style={{ fontSize:'0.75rem', color:'#fb923c' }}>{count} file{count !== 1 ? 's' : ''} pending · checked {ago(d.last_discovered_at)}</span>}
                 </div>
                 <div style={s.actions}>
@@ -360,15 +361,15 @@ export default function Devices() {
                     disabled={!!discovering[d.id]}
                     title="Compare local files on this device with server"
                   >
-                    {discovering[d.id] ? 'Discovering…' : '⟳ Discover files'}
+                    {discovering[d.id] ? 'Discovering…' : <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuSearch size={11} />Discover files</span>}
                   </button>
                   <button
                     style={snapshotting[d.id] ? s.btnBusy : s.btnSnapshot}
                     onClick={() => snapshot(d.id)}
                     disabled={!!snapshotting[d.id]}
-                    title="Download all synced files from server to this device"
+                    title="Send all synced files from server to this device"
                   >
-                    {snapshotting[d.id] ? 'Downloading…' : '↓ Download from server'}
+                    {snapshotting[d.id] ? 'Sending…' : <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuDownload size={11} />Send files to this machine</span>}
                   </button>
                   <button
                     style={restarting[d.id] ? s.btnBusy : s.btnRestart}
@@ -376,11 +377,11 @@ export default function Devices() {
                     disabled={!!restarting[d.id]}
                     title="Send restart signal to agent on this device"
                   >
-                    {restarting[d.id] ? 'Restarting…' : '↺ Restart agent'}
+                    {restarting[d.id] ? 'Restarting…' : <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuRotateCcw size={11} />Restart agent</span>}
                   </button>
                 </div>
               </div>
-              <button style={s.del} onClick={() => remove(d.id)} title="Remove device">✕</button>
+              <button style={s.del} onClick={() => remove(d.id)} title="Remove device"><LuX size={14} /></button>
             </div>
             {state === 'pending' && (
               <PendingPanel

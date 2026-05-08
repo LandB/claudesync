@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { LuRefreshCw, LuCheck, LuDownload } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -154,10 +155,10 @@ export default function PluginManager() {
           <select style={s.devsel} value={deviceId} onChange={e => setDeviceId(e.target.value)}>
             {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          <button style={s.refresh} onClick={() =>
+          <button style={{ ...s.refresh, display:'inline-flex', alignItems:'center', gap:'5px' }} onClick={() =>
             fetch('https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/refresh-plugins', { method:'POST' })
               .then(() => search())
-          }>↻ Refresh registry</button>
+          }><LuRefreshCw size={13} />Refresh registry</button>
         </div>
 
         {loading && <div style={s.empty}>Loading…</div>}
@@ -174,13 +175,13 @@ export default function PluginManager() {
                   <div style={s.meta}>
                     <span style={s.badge(p.source)}>{p.source}</span>
                     <span style={s.dl}>v{p.version}</span>
-                    {p.weekly_downloads > 0 && <span style={s.dl}>↓ {p.weekly_downloads.toLocaleString()}/wk</span>}
+                    {p.weekly_downloads > 0 && <span style={{ ...s.dl, display:'inline-flex', alignItems:'center', gap:'2px' }}><LuDownload size={10} />{p.weekly_downloads.toLocaleString()}/wk</span>}
                   </div>
                 </div>
                 <button style={s.btn(inst || st === 'done')}
                   onClick={() => !inst && st !== 'installing' && install(p)}
                   disabled={inst || st === 'installing'}>
-                  {st === 'installing' ? '…' : inst || st === 'done' ? '✓ Installed' : 'Install'}
+                  {st === 'installing' ? '…' : inst || st === 'done' ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuCheck size={12} />Installed</span> : 'Install'}
                 </button>
               </div>
             )
