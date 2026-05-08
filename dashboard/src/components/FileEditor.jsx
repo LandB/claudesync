@@ -72,16 +72,19 @@ export default function FileEditor() {
 
       const { data: devices } = await supabase.from('devices').select('id')
       if (devices?.length) {
-        await supabase.from('change_queue').insert(
-          devices.map(d => ({
-            user_id: user.id, target_device: d.id, file_path: selected.path,
-            operation: 'upsert', storage_path: selected.storage_path, hash,
-          }))
-        )
+        await Promise.all(devices.map(d => new Promise(resolve => {
+          const ch = supabase.channel(`device:${d.id}`)
+          ch.subscribe(status => {
+            if (status === 'SUBSCRIBED') {
+              ch.send({ type: 'broadcast', event: 'pull-files', payload: { files: [selected.path] } })
+                .finally(() => { supabase.removeChannel(ch); resolve() })
+            }
+          })
+        })))
       }
 
       setOriginal(content)
-      setMsg({ ok: true, text: `Saved · queued for ${devices?.length ?? 0} device(s)` })
+      setMsg({ ok: true, text: `Saved · sent to ${devices?.length ?? 0} device(s)` })
     } catch (e) {
       setMsg({ ok: false, text: e.message })
     }

@@ -209,6 +209,36 @@ async function main() {
         console.error('[snapshot error]', err.message)
       }
     })
+    .on('broadcast', { event: 'pull-files' }, async ({ payload }) => {
+      const targetPaths = new Set(payload?.files ?? [])
+      if (!targetPaths.size) return
+      console.log(`[pull-files] ${targetPaths.size} file(s)...`)
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/sync-snapshot`, {
+          headers: { 'Authorization': `Bearer ${agentToken}` },
+        })
+        if (!res.ok) throw new Error(`sync-snapshot failed: ${res.status}`)
+        const { files } = await res.json()
+        for (const f of files.filter(f => targetPaths.has(f.path))) {
+          if (!f.download_url) continue
+          try {
+            const dlRes = await fetch(f.download_url)
+            if (!dlRes.ok) { console.error(`[pull-files] download failed: ${f.path}`); continue }
+            const raw = Buffer.from(await dlRes.arrayBuffer())
+            const content = expandHomePath(expandPluginPaths(f.path, raw, claudePath), claudePath)
+            const absPath = join(claudePath, f.path)
+            mkdirSync(dirname(absPath), { recursive: true })
+            writeFileSync(absPath, content)
+            console.log(`[pull-files] ${f.path}`)
+          } catch (err) {
+            console.error(`[pull-files] error ${f.path}:`, err.message)
+          }
+        }
+        console.log('[pull-files] done')
+      } catch (err) {
+        console.error('[pull-files error]', err.message)
+      }
+    })
     .on('broadcast', { event: 'restart' }, () => {
       console.log('[restart] restart requested from dashboard — exiting')
       process.exit(0)
