@@ -2,23 +2,28 @@
 
 > Keep your Claude Code environment identical across every machine.
 
-ClaudeSync syncs your `~/.claude` directory — CLAUDE.md, skills, plugins, settings — in real-time between all your devices. A thin local agent watches for changes and pushes them to Supabase. Other devices pull instantly via Realtime or catch up on reconnect.
+ClaudeSync syncs your `~/.claude` directory — CLAUDE.md, skills, plugins, settings — across all your devices. A lightweight agent on each machine connects via Supabase Realtime and waits for commands from the dashboard. Sync is fully manual: you decide what to push and when to pull.
 
 ## How it works
 
 ```
-Device A                    Supabase                    Device B
-~/.claude ──watch──► agent ──push──► storage + DB ──realtime──► agent ──► ~/.claude
-                                           │
-                                     change_queue
-                                     sync_files
-                                     conflict_log
+Dashboard                   Supabase                    Agent (each device)
+  │                            │                              │
+  ├─ Discover Files ──────────►│────── broadcast ────────────►│── scan ~/.claude
+  │                            │◄── POST sync-discover ───────│
+  │◄── discovery_results ──────│                              │
+  │                            │                              │
+  ├─ Sync N files ────────────►│────── broadcast ────────────►│── read files
+  │                            │◄── POST sync-push (each) ────│
+  │                            │◄── POST sync-complete ────────│
+  │                            │                              │
+  ├─ Send files to machine ───►│────── broadcast ────────────►│── write ~/.claude
+  │                            │◄── GET sync-snapshot ─────────│── install plugins
 ```
 
-- **Agent** — Node.js process, watches `~/.claude`, pushes changes via Edge Functions  
-- **Edge Functions** — Deno, handle auth, sync, MCP protocol  
-- **Dashboard** — React SPA on Netlify, manage devices, edit files, browse plugins  
-- **MCP** — Claude Code connects directly via `claude mcp add`, exposes 7 tools  
+1. **Discover** — agent scans `~/.claude`, posts file hashes; server diffs against stored versions, writes results to `discovery_results`
+2. **Sync to server** — dashboard shows pending files as a tree with checkboxes; agent reads selected files and pushes them
+3. **Send to machine** — agent pulls all server files to `~/.claude`, then auto-installs any missing plugins via `claude plugin install`
 
 ## Stack
 
@@ -27,27 +32,60 @@ Device A                    Supabase                    Device B
 | Database | Supabase Postgres + RLS |
 | Storage | Supabase Storage (private, per-user) |
 | Realtime | Supabase Realtime broadcast |
-| API | Supabase Edge Functions (Deno) |
+| Edge Functions | Deno (Supabase) |
 | Dashboard | React + Vite → Netlify |
-| Agent | Node.js, chokidar |
+| Agent | Node.js (no file watcher — event-driven) |
 
-**Cost:** $0 on Supabase + Netlify free tiers during development. ~$25/mo Supabase Pro for production.
-
-## Quick start (use hosted)
+## Quick start
 
 1. **Sign up** at your ClaudeSync dashboard URL
-2. **Install agent** on each machine:
-   ```bash
-   curl -fsSL https://<project>.supabase.co/functions/v1/install-script | bash
-   ```
-3. **Add MCP to Claude Code:**
-   ```bash
-   claude mcp add --transport http claudesync \
-     https://<project>.supabase.co/functions/v1/mcp \
-     --header 'Authorization: Bearer YOUR_TOKEN'
-   ```
+2. Go to **Token & Install**, copy the install command for your platform
+3. Run it on each machine — the agent installs itself and auto-starts
+
+**macOS / Linux:**
+```bash
+curl -fsSL https://<project>.supabase.co/functions/v1/install-script?token=YOUR_TOKEN | bash
+```
+
+**Windows (PowerShell, run as Administrator):**
+```powershell
+$tmp="$env:TEMP\cs-install.ps1"
+irm "https://<project>.supabase.co/functions/v1/install-script?token=YOUR_TOKEN&platform=win" -OutFile $tmp
+& $tmp
+```
+
+**Add MCP to Claude Code:**
+```bash
+claude mcp add --transport http claudesync \
+  https://<project>.supabase.co/functions/v1/mcp \
+  --header 'Authorization: Bearer YOUR_TOKEN' \
+  --scope user
+```
 
 Your token is shown in the dashboard under **Token & Install**.
+
+## Dashboard
+
+| Page | What it does |
+|---|---|
+| **Overview** | File count, device count, conflict count, recent activity tree |
+| **Devices** | Per-device discover / sync / snapshot / restart controls |
+| **Files** | Browse and edit synced files in-browser |
+| **Plugins & Skills** | Browse registry (162+ entries), install to a device, view installed |
+| **Conflicts** | Review and resolve files written concurrently on two devices |
+| **Token & Install** | Token management, install commands for all platforms |
+
+### Device workflow
+
+Each device card has three actions:
+
+- **Discover files** — compares local `~/.claude` against server, shows a file tree of differences with new/modified badges. Select files with checkboxes, then **Sync to server**.
+- **Send files to this machine** — pushes all server files down to the device and installs missing plugins.
+- **Restart agent** — sends a restart signal; launchd/systemd restarts the process automatically.
+
+## Path portability
+
+Paths containing your home directory or claude path are tokenized on push (`{{USER_HOME}}`, `{{CLAUDE_PATH}}`) and expanded back on pull. Files sync cleanly between machines with different usernames or install locations.
 
 ## Self-host
 
@@ -72,94 +110,27 @@ supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 ```
 
-This creates all tables, RLS policies, storage bucket, Realtime publications, and cron jobs.
-
 ### 3. Deploy Edge Functions
 
 ```bash
-for fn in heartbeat sync-push sync-pull bundle install-script mcp refresh-plugins; do
-  supabase functions deploy $fn --no-verify-jwt
+for fn in heartbeat sync-push sync-discover sync-complete sync-snapshot sync-trigger sync-pull bundle device-restart install-script mcp refresh-plugins; do
+  supabase functions deploy $fn
 done
 ```
 
 ### 4. Deploy dashboard
 
-```bash
-# Set env vars in Netlify UI or CLI:
-# VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-# VITE_SUPABASE_ANON_KEY=your-anon-key
+Set env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), then:
 
-netlify deploy --prod --dir=dashboard/dist
+```bash
+cd dashboard && npm install && npm run build
+netlify deploy --prod --dir=dist
 # or connect GitHub repo to Netlify for auto-deploy
 ```
 
 ### 5. Install agent
 
-Get your token from the dashboard, then:
-
-```bash
-curl -fsSL https://YOUR_PROJECT.supabase.co/functions/v1/install-script | bash
-```
-
-## MCP tools
-
-| Tool | Description |
-|---|---|
-| `sync_push` | Push a file to all devices |
-| `sync_pull` | Pull pending changes for this device |
-| `device_status` | List devices with online/offline status |
-| `list_skills` | Browse the community plugin registry |
-| `install_skill` | Install a skill from the registry |
-| `install_plugin` | Install an MCP plugin from the registry |
-| `diff` | Compare local file against remote version |
-
-## Project structure
-
-```
-claudesync/
-├── agent/                  # Node.js local agent
-│   ├── index.js            # Entry point
-│   └── lib/
-│       ├── api.js           # Edge Function calls
-│       ├── applier.js       # Apply incoming changes
-│       ├── config.js        # Config loader
-│       └── watcher.js       # fs.watch + debounce
-├── dashboard/              # React + Vite SPA
-│   └── src/
-│       └── components/
-│           ├── AuthScreen.jsx
-│           ├── ConflictLog.jsx
-│           ├── Devices.jsx
-│           ├── FileEditor.jsx
-│           ├── PluginManager.jsx
-│           ├── SyncPanel.jsx
-│           └── TokenPanel.jsx
-├── supabase/
-│   ├── functions/          # Deno Edge Functions
-│   │   ├── _shared/auth.ts
-│   │   ├── heartbeat/
-│   │   ├── sync-push/
-│   │   ├── sync-pull/
-│   │   ├── bundle/
-│   │   ├── install-script/
-│   │   ├── mcp/
-│   │   └── refresh-plugins/
-│   └── migrations/         # 11 ordered SQL migrations
-└── netlify.toml
-```
-
-## Database schema
-
-| Table | Purpose |
-|---|---|
-| `profiles` | One row per user, stores agent bearer token |
-| `devices` | Registered machines, heartbeat timestamp |
-| `sync_files` | File metadata index (path, hash, storage_path) |
-| `change_queue` | Per-device delivery queue for file changes |
-| `conflict_log` | Records when two devices write the same file concurrently |
-| `plugin_registry` | Community skill/plugin catalog (162+ entries) |
-
-All tables have Row Level Security — users only access their own rows.
+Get your token from the dashboard, then run the install command for your platform.
 
 ## Agent auto-start
 
@@ -167,16 +138,73 @@ All tables have Row Level Security — users only access their own rows.
 |---|---|
 | macOS | launchd (`~/Library/LaunchAgents/com.claudesync.agent.plist`) |
 | Linux | systemd user service (`~/.config/systemd/user/claudesync.service`) |
-| Windows | Task Scheduler (via `schtasks.exe`) |
+| Windows | Task Scheduler + VBScript launcher (hidden window, restarts on failure) |
+| No systemd | Shell rc file (`~/.bashrc` / `~/.zshrc`) + nohup |
+
+## Database schema
+
+| Table | Purpose |
+|---|---|
+| `profiles` | One row per user, stores agent bearer token |
+| `devices` | Registered machines, heartbeat timestamp, MAC address |
+| `sync_files` | File metadata index (path, hash, storage_path) |
+| `discovery_results` | Diff store — pending files per device after a discover run |
+| `conflict_log` | Records when two devices write the same file concurrently |
+| `plugin_registry` | Community skill/plugin catalog |
+| `device_blocklist` | Prevents removed devices from re-registering |
+
+All tables have Row Level Security — users only access their own rows.
+
+## Edge Functions
+
+| Function | Auth | Purpose |
+|---|---|---|
+| `heartbeat` | Agent token | Device registration + keepalive |
+| `sync-push` | Agent token | Push one file to storage + DB |
+| `sync-discover` | Agent token | Receive file list, write diffs to `discovery_results` |
+| `sync-complete` | Agent token | Clear `discovery_results` after sync |
+| `sync-snapshot` | Agent token | Return download URLs for all server files |
+| `sync-trigger` | Supabase JWT | Dashboard → broadcast discover/sync/snapshot to device |
+| `device-restart` | Supabase JWT | Dashboard → broadcast restart to device |
+| `install-script` | User token | Generate `install.sh` or `install.ps1` |
+| `mcp` | Agent token | Claude Code MCP server |
+| `refresh-plugins` | Supabase JWT | Refresh plugin registry from npm + awesome-mcp |
+
+## Project structure
+
+```
+claudesync/
+├── agent/
+│   ├── index.js                    # Entry — Realtime listener, event handlers
+│   └── lib/
+│       ├── api.js                  # Edge Function client
+│       ├── config.js               # Config loader
+│       ├── watcher.js              # Allow/ignore rules (shared with discovery)
+│       └── sanitize-plugin-paths.js # Path tokenization
+├── dashboard/
+│   └── src/
+│       └── components/
+│           ├── AuthScreen.jsx
+│           ├── ConflictLog.jsx
+│           ├── Devices.jsx         # Device cards, discover/sync/snapshot
+│           ├── FileEditor.jsx
+│           ├── PluginManager.jsx
+│           ├── SyncPanel.jsx       # Overview + recent activity
+│           └── TokenPanel.jsx
+├── supabase/
+│   ├── functions/                  # Deno Edge Functions (one dir per function)
+│   └── migrations/                 # Ordered SQL migrations
+└── netlify.toml
+```
 
 ## Contributing
 
 1. Fork + clone
-2. `supabase start` (requires Docker) or link to your own Supabase project
+2. `supabase start` (requires Docker) or link to your own project
 3. `cd dashboard && npm install && npm run dev`
-4. `cd agent && node index.js` (with `CLAUDESYNC_CONFIG` pointing to your config)
+4. `CLAUDESYNC_CONFIG=~/.claudesync/config.json node agent/index.js`
 
-PRs welcome. Please open an issue first for large changes.
+PRs welcome. Open an issue first for large changes.
 
 ## License
 
