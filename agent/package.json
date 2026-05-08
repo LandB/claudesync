@@ -10,6 +10,25 @@
   "scripts": {
     "start": "node index.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "sync",
+    "mcp"
+  ],
+  "license": "AGPL-3.0",
+  "homepage": "https://github.com/LandB/claudesync",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LandB/claudesync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LandB/claudesync/issues"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
     "chokidar": "^4.0.3"

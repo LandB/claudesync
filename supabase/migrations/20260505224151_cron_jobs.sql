@@ -16,12 +16,13 @@ select cron.schedule(
 );
 
 -- Hourly plugin registry refresh
+-- SELF-HOSTING: replace YOUR_PROJECT_REF with your actual Supabase project ref
 select cron.schedule(
   'refresh-plugins',
   '0 * * * *',
   $$
   select net.http_post(
-    url      := 'https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/refresh-plugins',
+    url      := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/refresh-plugins',
     headers  := '{"Content-Type":"application/json"}'::jsonb,
     body     := '{}'::jsonb
   )

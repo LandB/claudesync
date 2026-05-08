@@ -156,7 +156,7 @@ export default function PluginManager() {
             {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           <button style={{ ...s.refresh, display:'inline-flex', alignItems:'center', gap:'5px' }} onClick={() =>
-            fetch('https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/refresh-plugins', { method:'POST' })
+            fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refresh-plugins`, { method:'POST' })
               .then(() => search())
           }><LuRefreshCw size={13} />Refresh registry</button>
         </div>

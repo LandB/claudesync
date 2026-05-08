@@ -106,7 +106,10 @@ supabase link --project-ref YOUR_PROJECT_REF
 
 ### 2. Run migrations
 
+Before pushing, replace `YOUR_PROJECT_REF` in `supabase/migrations/20260505224151_cron_jobs.sql` with your actual Supabase project ref:
+
 ```bash
+sed -i '' 's/YOUR_PROJECT_REF/YOUR_ACTUAL_REF/g' supabase/migrations/20260505224151_cron_jobs.sql
 supabase db push
 ```
 
