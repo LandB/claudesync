@@ -409,10 +409,8 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.heartbeat]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/heartbeat/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/heartbeat/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
@@ -420,25 +418,10 @@ entrypoint = "./functions/heartbeat/index.ts"
 
 [functions.sync-push]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/sync-push/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/sync-push/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/sync-push/*.html" ]
 
-[functions.sync-pull]
-enabled = true
-verify_jwt = true
-import_map = "./functions/sync-pull/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/sync-pull/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/sync-pull/*.html" ]
 
 [functions.bundle]
 enabled = true
@@ -490,8 +473,17 @@ verify_jwt = false
 import_map = "./functions/sync-snapshot/deno.json"
 entrypoint = "./functions/sync-snapshot/index.ts"
 
-[functions.sync-resync]
+[functions.sync-discover]
 enabled = true
 verify_jwt = false
-import_map = "./functions/sync-resync/deno.json"
-entrypoint = "./functions/sync-resync/index.ts"
+entrypoint = "./functions/sync-discover/index.ts"
+
+[functions.sync-complete]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/sync-complete/index.ts"
+
+[functions.sync-trigger]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/sync-trigger/index.ts"
