@@ -18,6 +18,7 @@ const s = {
   btnBusy:     { background:'#1a1a1a', border:'1px solid #333', color:'#555', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px', cursor:'default' },
   btnSync:     { background:'#0f2d1a', border:'1px solid #166534', color:'#4ade80', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
   btnRestart:  { background:'#1a1a0a', border:'1px solid #4a3f00', color:'#facc15', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
+  btnSnapshot: { background:'#1a0f2e', border:'1px solid #4c1d95', color:'#a78bfa', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
   pending:     { marginTop:'0.75rem', borderTop:'1px solid #252525', paddingTop:'0.75rem' },
   pendingHead: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.5rem' },
   pendingLbl:  { fontSize:'0.8rem', color:'#aaa', fontWeight:'500' },
@@ -137,6 +138,7 @@ export default function Devices() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [discovering, setDiscovering] = useState({})
+  const [snapshotting, setSnapshotting] = useState({})
   const [restarting, setRestarting] = useState({})
   const [pendingCounts, setPendingCounts] = useState({})
 
@@ -183,6 +185,12 @@ export default function Devices() {
       await loadPendingCounts(devices)
       setDiscovering(d => ({ ...d, [id]: false }))
     }, 4000)
+  }
+
+  async function snapshot(id) {
+    setSnapshotting(s => ({ ...s, [id]: true }))
+    await broadcastToDevice(id, 'snapshot')
+    setTimeout(() => setSnapshotting(s => ({ ...s, [id]: false })), 3000)
   }
 
   async function restart(id) {
@@ -256,6 +264,14 @@ export default function Devices() {
                     title="Compare local files on this device with server"
                   >
                     {discovering[d.id] ? 'Discovering…' : '⟳ Discover files'}
+                  </button>
+                  <button
+                    style={snapshotting[d.id] ? s.btnBusy : s.btnSnapshot}
+                    onClick={() => snapshot(d.id)}
+                    disabled={!!snapshotting[d.id]}
+                    title="Download all synced files from server to this device"
+                  >
+                    {snapshotting[d.id] ? 'Downloading…' : '↓ Download from server'}
                   </button>
                   <button
                     style={restarting[d.id] ? s.btnBusy : s.btnRestart}

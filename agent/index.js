@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 process.title = 'claudesync-agent'
 import { hostname, platform, networkInterfaces } from 'os'
-import { readdirSync, readFileSync } from 'fs'
-import { join, relative } from 'path'
+import { readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
+import { join, relative, dirname } from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { loadConfig } from './lib/config.js'
 import { ApiClient, sha256 } from './lib/api.js'
 import { isAllowed, CHOKIDAR_IGNORE } from './lib/watcher.js'
-import { sanitizePluginPaths, sanitizeHomePath } from './lib/sanitize-plugin-paths.js'
+import { sanitizePluginPaths, sanitizeHomePath, expandPluginPaths, expandHomePath } from './lib/sanitize-plugin-paths.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 
@@ -107,6 +107,37 @@ async function main() {
         console.log('[sync] complete')
       } catch (err) {
         console.error('[sync] syncComplete error:', err.message)
+      }
+    })
+    .on('broadcast', { event: 'snapshot' }, async () => {
+      console.log('[snapshot] pulling from server...')
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/sync-snapshot`, {
+          headers: { 'Authorization': `Bearer ${agentToken}` },
+        })
+        if (!res.ok) throw new Error(`sync-snapshot failed: ${res.status}`)
+        const { files } = await res.json()
+        console.log(`[snapshot] ${files.length} file(s) on server`)
+        let pulled = 0
+        for (const f of files) {
+          if (!f.download_url) continue
+          try {
+            const dlRes = await fetch(f.download_url)
+            if (!dlRes.ok) { console.error(`[snapshot] download failed: ${f.path}`); continue }
+            const raw = Buffer.from(await dlRes.arrayBuffer())
+            const content = expandHomePath(expandPluginPaths(f.path, raw, claudePath), claudePath)
+            const absPath = join(claudePath, f.path)
+            mkdirSync(dirname(absPath), { recursive: true })
+            writeFileSync(absPath, content)
+            console.log(`[snapshot] ${f.path}`)
+            pulled++
+          } catch (err) {
+            console.error(`[snapshot] error ${f.path}:`, err.message)
+          }
+        }
+        console.log(`[snapshot] done — ${pulled} pulled`)
+      } catch (err) {
+        console.error('[snapshot error]', err.message)
       }
     })
     .on('broadcast', { event: 'restart' }, () => {
