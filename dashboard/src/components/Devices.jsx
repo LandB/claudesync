@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LuSearch, LuDownload, LuRotateCcw, LuX, LuCheck, LuChevronDown, LuChevronRight, LuUpload, LuRefreshCw } from 'react-icons/lu'
+import { LuSearch, LuDownload, LuRotateCcw, LuX, LuCheck, LuChevronDown, LuChevronRight, LuUpload, LuRefreshCw, LuPencil } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
 const s = {
@@ -37,6 +37,10 @@ const s = {
   checkbox:    { accentColor:'#a78bfa', cursor:'pointer', marginRight:'4px' },
   syncBar:     { display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:'0.5rem' },
   selectAll:   { fontSize:'0.75rem', color:'#666', cursor:'pointer', background:'none', border:'none', padding:0 },
+  nameWrap:    { display:'flex', alignItems:'center', gap:'6px' },
+  renameInput: { background:'#111', border:'1px solid #444', borderRadius:'4px', color:'#fff', fontSize:'0.95rem', fontWeight:'600', padding:'1px 6px', outline:'none', width:'180px' },
+  pencil:      { background:'none', border:'none', color:'#444', cursor:'pointer', padding:'2px', lineHeight:1, display:'inline-flex', alignItems:'center' },
+  renameOk:    { background:'none', border:'none', color:'#4ade80', cursor:'pointer', padding:'2px', lineHeight:1, display:'inline-flex', alignItems:'center' },
 }
 
 function ago(ts) {
@@ -239,6 +243,8 @@ export default function Devices() {
   const [snapshotting, setSnapshotting] = useState({})
   const [restarting, setRestarting] = useState({})
   const [pendingCounts, setPendingCounts] = useState({})
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameVal, setRenameVal] = useState('')
 
   async function load(initial = false) {
     if (initial) setLoading(true)
@@ -297,6 +303,14 @@ export default function Devices() {
     setTimeout(() => setRestarting(r => ({ ...r, [id]: false })), 3000)
   }
 
+  async function rename(id) {
+    const name = renameVal.trim()
+    if (!name) { setRenamingId(null); return }
+    await supabase.from('devices').update({ name }).eq('id', id)
+    setDevices(ds => ds.map(d => d.id === id ? { ...d, name } : d))
+    setRenamingId(null)
+  }
+
   async function remove(id) {
     const device = devices.find(d => d.id === id)
     await supabase.from('devices').delete().eq('id', id)
@@ -347,7 +361,25 @@ export default function Devices() {
             <div style={s.deviceTop}>
               <div style={s.dot(online)} />
               <div style={{ flex:1 }}>
-                <div style={s.name}>{d.name}</div>
+                <div style={s.nameWrap}>
+                  {renamingId === d.id
+                    ? <>
+                        <input
+                          style={s.renameInput}
+                          value={renameVal}
+                          autoFocus
+                          onChange={e => setRenameVal(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') rename(d.id); if (e.key === 'Escape') setRenamingId(null) }}
+                          onBlur={() => rename(d.id)}
+                        />
+                        <button style={s.renameOk} onMouseDown={e => { e.preventDefault(); rename(d.id) }}><LuCheck size={13} /></button>
+                      </>
+                    : <>
+                        <span style={s.name}>{d.name}</span>
+                        <button style={s.pencil} onClick={() => { setRenamingId(d.id); setRenameVal(d.name) }} title="Rename"><LuPencil size={11} /></button>
+                      </>
+                  }
+                </div>
                 <div style={s.meta}>
                   {d.hostname} · {d.platform} · v{d.agent_version}<br />
                   Last seen: {ago(d.last_seen_at)}<br />
