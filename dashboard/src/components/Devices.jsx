@@ -304,10 +304,9 @@ export default function Devices() {
   }
 
   async function rename(id) {
-    const name = renameVal.trim()
-    if (!name) { setRenamingId(null); return }
-    await supabase.from('devices').update({ name }).eq('id', id)
-    setDevices(ds => ds.map(d => d.id === id ? { ...d, name } : d))
+    const custom_name = renameVal.trim() || null
+    await supabase.from('devices').update({ custom_name }).eq('id', id)
+    setDevices(ds => ds.map(d => d.id === id ? { ...d, custom_name } : d))
     setRenamingId(null)
   }
 
@@ -375,8 +374,8 @@ export default function Devices() {
                         <button style={s.renameOk} onMouseDown={e => { e.preventDefault(); rename(d.id) }}><LuCheck size={13} /></button>
                       </>
                     : <>
-                        <span style={s.name}>{d.name}</span>
-                        <button style={s.pencil} onClick={() => { setRenamingId(d.id); setRenameVal(d.name) }} title="Rename"><LuPencil size={11} /></button>
+                        <span style={s.name}>{d.custom_name ?? d.name}</span>
+                        <button style={s.pencil} onClick={() => { setRenamingId(d.id); setRenameVal(d.custom_name ?? d.name) }} title="Rename"><LuPencil size={11} /></button>
                       </>
                   }
                 </div>
