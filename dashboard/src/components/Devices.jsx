@@ -29,6 +29,7 @@ export default function Devices() {
   const [loading, setLoading] = useState(true)
   const [resyncing, setResyncing] = useState({})
   const [resyncingAll, setResyncingAll] = useState(false)
+  const [restarting, setRestarting] = useState({})
 
   async function load(initial = false) {
     if (initial) setLoading(true)
@@ -44,6 +45,12 @@ export default function Devices() {
     setResyncing(r => ({ ...r, [id]: true }))
     await supabase.functions.invoke('sync-resync', { body: { device_id: id } })
     setResyncing(r => ({ ...r, [id]: false }))
+  }
+
+  async function restart(id) {
+    setRestarting(r => ({ ...r, [id]: true }))
+    await supabase.functions.invoke('device-restart', { body: { device_id: id } })
+    setTimeout(() => setRestarting(r => ({ ...r, [id]: false })), 3000)
   }
 
   async function resyncAll() {
@@ -106,14 +113,24 @@ export default function Devices() {
                 Last seen: {ago(d.last_seen_at)}<br />
                 <span style={{ color:'#444', fontSize:'0.75rem' }}>{d.id}</span>
               </div>
-              <button
-                style={resyncing[d.id] ? s.pulling : s.pull}
-                onClick={() => resync(d.id)}
-                disabled={!!resyncing[d.id]}
-                title="Queue all server files for delivery to this device"
-              >
-                {resyncing[d.id] ? 'Queuing…' : '↓ Pull from server'}
-              </button>
+              <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
+                <button
+                  style={resyncing[d.id] ? s.pulling : s.pull}
+                  onClick={() => resync(d.id)}
+                  disabled={!!resyncing[d.id]}
+                  title="Queue all server files for delivery to this device"
+                >
+                  {resyncing[d.id] ? 'Queuing…' : '↓ Pull from server'}
+                </button>
+                <button
+                  style={restarting[d.id] ? s.pulling : s.pull}
+                  onClick={() => restart(d.id)}
+                  disabled={!!restarting[d.id]}
+                  title="Send restart signal to agent on this device"
+                >
+                  {restarting[d.id] ? 'Restarting…' : '↺ Restart agent'}
+                </button>
+              </div>
             </div>
             <button style={s.del} onClick={() => remove(d.id)} title="Remove device">✕</button>
           </div>

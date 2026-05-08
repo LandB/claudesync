@@ -78,6 +78,10 @@ async function main() {
     .on('broadcast', { event: 'change' }, async () => {
       await pullAndApply({ api, deviceId, claudePath, hashCache })
     })
+    .on('broadcast', { event: 'restart' }, () => {
+      console.log('[restart] restart requested from dashboard — exiting')
+      process.exit(0)
+    })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') console.log('[realtime] connected')
       if (status === 'CHANNEL_ERROR') console.warn('[realtime] channel error — falling back to polling')
