@@ -56,7 +56,7 @@ export default function App() {
         <nav style={s.nav}>
           {NAV.map(({ to, label, Icon }) => (
             <NavLink key={to} to={to} end={to === '/'} style={s.item}>
-              {({ isActive }) => (
+              {() => (
                 <span style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
                   <Icon size={15} />
                   {label}

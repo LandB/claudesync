@@ -118,65 +118,6 @@ function renderTree(node, depth, expanded, toggle) {
   return rows
 }
 
-function PendingModal({ onClose }) {
-  const [items, setItems] = useState(null)
-  const [devices, setDevices] = useState({})
-
-  useEffect(() => {
-    async function load() {
-      const [qRes, devRes] = await Promise.all([
-        supabase.from('change_queue').select('file_path, operation, target_device, created_at')
-          .eq('delivered', false).order('created_at', { ascending: false }).limit(100),
-        supabase.from('devices').select('id, name'),
-      ])
-      setItems(qRes.data ?? [])
-      const map = {}
-      for (const d of devRes.data ?? []) map[d.id] = d.name
-      setDevices(map)
-    }
-    load()
-  }, [])
-
-  return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
-        <div style={s.mhead}>
-          <span style={s.mtitle}>Pending changes</span>
-          <button style={s.mclose} onClick={onClose}><LuX size={15} /></button>
-        </div>
-        <div style={s.mexplain}>
-          When a file changes on one device, ClaudeSync queues a delivery to every other registered device. <strong style={{ color:'#ccc' }}>Pending changes</strong> are queued deliveries that haven't been picked up yet — usually because the target device is offline. The count drops to zero once all devices sync.
-        </div>
-        <div style={s.mscroll}>
-          {items === null && <div style={s.empty}>Loading…</div>}
-          {items?.length === 0 && <div style={s.empty}>No pending changes.</div>}
-          {items?.length > 0 &&
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  <th style={s.th}>File</th>
-                  <th style={s.th}>Op</th>
-                  <th style={s.th}>Target device</th>
-                  <th style={s.th}>Queued</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => (
-                  <tr key={i}>
-                    <td style={s.td}><span style={s.dimPath}>{item.file_path}</span></td>
-                    <td style={s.td}><span style={s.mop(item.operation)}>{item.operation}</span></td>
-                    <td style={s.td}><span style={s.mdev}>{devices[item.target_device] ?? item.target_device?.slice(0, 8)}</span></td>
-                    <td style={{ ...s.td, ...s.del }}>{ago(item.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          }
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function ConflictModal({ pending, onClose }) {
   const [conflicts, setConflicts] = useState(null)

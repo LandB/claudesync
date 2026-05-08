@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { LuRefreshCw, LuCheck, LuDownload } from 'react-icons/lu'
 import { supabase } from '../supabase'
 
@@ -19,7 +19,7 @@ const s = {
   meta:     { display:'flex', gap:'0.5rem', marginTop:'6px', flexWrap:'wrap' },
   badge:    (src) => ({ fontSize:'0.7rem', padding:'2px 7px', borderRadius:'4px', background: src==='npm' ? '#1e3a5f' : src==='awesome-mcp' ? '#2d1f4e' : '#1a2e1a', color: src==='npm' ? '#60a5fa' : src==='awesome-mcp' ? '#c4b5fd' : '#4ade80' }),
   dl:       { fontSize:'0.75rem', color:'#444' },
-  btn:      (installed) => ({ flexShrink:0, padding:'5px 14px', borderRadius:'6px', fontSize:'0.8rem', cursor:'pointer', border:'none', background: installed ? '#1a1a1a' : '#7c3aed', color: installed ? '#555' : '#fff', border: installed ? '1px solid #2a2a2a' : 'none' }),
+  btn:      (installed) => ({ flexShrink:0, padding:'5px 14px', borderRadius:'6px', fontSize:'0.8rem', cursor:'pointer', background: installed ? '#1a1a1a' : '#7c3aed', color: installed ? '#555' : '#fff', border: installed ? '1px solid #2a2a2a' : 'none' }),
   empty:    { color:'#555', fontSize:'0.85rem', padding:'2rem 0' },
   devsel:   { background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:'6px', color:'#e8e8e8', padding:'7px 10px', fontSize:'0.85rem', cursor:'pointer' },
   insthead: { display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap' },
@@ -47,7 +47,7 @@ export default function PluginManager() {
 
   useEffect(() => {
     if (tab === 'browse') search()
-  }, [tab, query, source])
+  }, [tab, query, source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function search() {
     setLoading(true)

@@ -20,7 +20,7 @@ const s = {
 
 export default function TokenPanel() {
   const [token, setToken] = useState(null)
-  const [url, setUrl] = useState('')
+  const [url] = useState(import.meta.env.VITE_SUPABASE_URL ?? '')
   const [copied, setCopied] = useState(false)
   const [copiedInstall, setCopiedInstall] = useState(false)
   const [copiedWin, setCopiedWin] = useState(false)
@@ -31,7 +31,6 @@ export default function TokenPanel() {
   const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
-    setUrl(import.meta.env.VITE_SUPABASE_URL)
     supabase.from('profiles').select('token').single()
       .then(({ data }) => setToken(data?.token ?? null))
   }, [])

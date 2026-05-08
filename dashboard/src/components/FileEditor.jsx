@@ -9,7 +9,7 @@ const s = {
   badge:       { fontSize:'0.75rem', color:'#555', marginLeft:'auto' },
   ta:          { width:'100%', minHeight:'400px', background:'#111', border:'1px solid #252525', borderRadius:'8px', color:'#e8e8e8', padding:'1rem', fontSize:'0.85rem', fontFamily:'monospace', lineHeight:'1.6', resize:'vertical', outline:'none' },
   row:         { display:'flex', gap:'0.5rem', marginTop:'0.75rem', flexWrap:'wrap' },
-  btn:         (primary) => ({ padding:'6px 16px', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem', border:'none', background: primary ? '#7c3aed' : '#1a1a1a', color: primary ? '#fff' : '#aaa', border: primary ? 'none' : '1px solid #333' }),
+  btn:         (primary) => ({ padding:'6px 16px', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem', background: primary ? '#7c3aed' : '#1a1a1a', color: primary ? '#fff' : '#aaa', border: primary ? 'none' : '1px solid #333' }),
   btnDanger:   { padding:'6px 16px', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem', border:'1px solid #7f1d1d', background:'none', color:'#f87171' },
   msg:         (ok) => ({ marginTop:'0.5rem', fontSize:'0.8rem', color: ok ? '#22c55e' : '#f87171' }),
   empty:       { color:'#555', fontSize:'0.9rem' },
@@ -31,7 +31,7 @@ export default function FileEditor() {
   const [confirm, setConfirm] = useState(null) // { type: 'file' | 'all' }
   const [msg, setMsg] = useState(null)
 
-  useEffect(() => { loadFiles() }, [])
+  useEffect(() => { loadFiles() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadFiles() {
     const { data } = await supabase.from('sync_files').select('path, storage_path, hash, size_bytes, updated_at')

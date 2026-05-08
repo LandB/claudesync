@@ -136,10 +136,6 @@ function PendingPanel({ device, onSyncDone }) {
   const [expanded, setExpanded] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
-    load()
-  }, [device.id])
-
   async function load() {
     const { data } = await supabase
       .from('discovery_results')
@@ -150,6 +146,10 @@ function PendingPanel({ device, onSyncDone }) {
     setDiffs(items)
     setSelected(new Set(items.map(d => d.file_path)))
   }
+
+  useEffect(() => {
+    load()
+  }, [device.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function togglePath(path) {
     setSelected(prev => {
@@ -321,7 +321,7 @@ export default function Devices() {
       loadPendingCounts(devices)
     }, 30_000)
     return () => clearInterval(t)
-  }, [devices.length])
+  }, [devices.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function pendingState(device) {
     if (!device.last_discovered_at) return 'unchecked'
@@ -338,7 +338,8 @@ export default function Devices() {
       {loading && <div style={s.empty}>Loading…</div>}
       {!loading && devices.length === 0 && <div style={s.empty}>No devices. Install the agent on a machine to get started.</div>}
       {!loading && devices.map(d => {
-        const online = (Date.now() - new Date(d.last_seen_at).getTime()) < 90_000
+        const now = Date.now()
+        const online = (now - new Date(d.last_seen_at).getTime()) < 90_000
         const state = pendingState(d)
         const count = pendingCounts[d.id] ?? 0
         return (
