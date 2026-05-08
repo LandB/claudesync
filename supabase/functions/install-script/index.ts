@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { validateToken, unauthorizedResponse, errorResponse } from '../_shared/auth.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 
 serve(async (req) => {
   if (req.method !== 'GET') return errorResponse('Method not allowed', 405)
@@ -35,24 +36,25 @@ serve(async (req) => {
   const platform = url.searchParams.get('platform') ?? 'unix'
 
   if (platform === 'win') {
-    const ps1 = generatePowershell(SUPABASE_URL, profile.token)
+    const ps1 = generatePowershell(SUPABASE_URL, SUPABASE_ANON_KEY, profile.token)
     return new Response(ps1, {
       headers: { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="install.ps1"' },
     })
   }
 
-  const sh = generateBash(SUPABASE_URL, profile.token)
+  const sh = generateBash(SUPABASE_URL, SUPABASE_ANON_KEY, profile.token)
   return new Response(sh, {
     headers: { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="install.sh"' },
   })
 })
 
-function generateBash(supabaseUrl: string, token: string): string {
+function generateBash(supabaseUrl: string, anonKey: string, token: string): string {
   return [
     '#!/usr/bin/env bash',
     'set -e',
     '',
     `SUPABASE_URL="${supabaseUrl}"`,
+    `SUPABASE_ANON_KEY="${anonKey}"`,
     `AGENT_TOKEN="${token}"`,
     'INSTALL_DIR="$HOME/.claudesync"',
     'AGENT_DIR="$INSTALL_DIR/agent"',
@@ -70,8 +72,8 @@ function generateBash(supabaseUrl: string, token: string): string {
     'NODE_BIN=$(which node)',
     'AGENT_BIN="$AGENT_DIR/index.js"',
     '',
-    'printf \'{"supabaseUrl":"%s","agentToken":"%s","claudePath":"%s"}\' \\',
-    '  "$SUPABASE_URL" "$AGENT_TOKEN" "$CLAUDE_PATH" > "$CONFIG_FILE"',
+    'printf \'{"supabaseUrl":"%s","agentToken":"%s","claudePath":"%s","supabaseAnonKey":"%s"}\' \\',
+    '  "$SUPABASE_URL" "$AGENT_TOKEN" "$CLAUDE_PATH" "$SUPABASE_ANON_KEY" > "$CONFIG_FILE"',
     '',
     'if [[ "$OSTYPE" == "darwin"* ]]; then',
     '  mkdir -p "$HOME/Library/LaunchAgents"',
@@ -121,7 +123,7 @@ function generateBash(supabaseUrl: string, token: string): string {
   ].join('\n')
 }
 
-function generatePowershell(supabaseUrl: string, token: string): string {
+function generatePowershell(supabaseUrl: string, anonKey: string, token: string): string {
   return [
     '# ClaudeSync Agent Installer for Windows',
     '$ErrorActionPreference = "Stop"',
@@ -133,6 +135,7 @@ function generatePowershell(supabaseUrl: string, token: string): string {
     '}',
     '',
     `$SUPABASE_URL = "${supabaseUrl}"`,
+    `$SUPABASE_ANON_KEY = "${anonKey}"`,
     `$AGENT_TOKEN = "${token}"`,
     '$InstallDir = "$env:USERPROFILE\\.claudesync"',
     '$AgentDir = "$InstallDir\\agent"',
@@ -146,7 +149,7 @@ function generatePowershell(supabaseUrl: string, token: string): string {
     '',
     '$ClaudePath = "$env:USERPROFILE\\.claude"',
     '',
-    '$config = @{ supabaseUrl = $SUPABASE_URL; agentToken = $AGENT_TOKEN; claudePath = $ClaudePath } | ConvertTo-Json',
+    '$config = @{ supabaseUrl = $SUPABASE_URL; agentToken = $AGENT_TOKEN; claudePath = $ClaudePath; supabaseAnonKey = $SUPABASE_ANON_KEY } | ConvertTo-Json',
     'Set-Content -Path $ConfigFile -Value $config',
     '',
     '# Download and extract agent from GitHub',
