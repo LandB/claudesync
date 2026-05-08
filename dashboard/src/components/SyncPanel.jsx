@@ -262,25 +262,22 @@ function ConflictModal({ pending, onClose }) {
 }
 
 export default function SyncPanel() {
-  const [stats, setStats]       = useState({ files: 0, devices: 0, pending: 0, conflicts: 0 })
+  const [stats, setStats]       = useState({ files: 0, devices: 0, conflicts: 0 })
   const [recent, setRecent]     = useState([])
   const [expanded, setExpanded] = useState(new Set())
-  const [showPending, setShowPending] = useState(false)
   const [showConflicts, setShowConflicts] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [filesRes, devRes, qRes, cfRes, recentRes] = await Promise.all([
+      const [filesRes, devRes, cfRes, recentRes] = await Promise.all([
         supabase.from('sync_files').select('id', { count:'exact' }).eq('deleted', false),
         supabase.from('devices').select('id', { count:'exact' }),
-        supabase.from('change_queue').select('id', { count:'exact' }).eq('delivered', false),
         supabase.from('conflict_log').select('id', { count:'exact' }).eq('resolved', false),
         supabase.from('sync_files').select('path, updated_at, updated_by').eq('deleted', false).order('updated_at', { ascending: false }).limit(50),
       ])
       setStats({
         files:     filesRes.count ?? 0,
         devices:   devRes.count ?? 0,
-        pending:   qRes.count ?? 0,
         conflicts: cfRes.count ?? 0,
       })
       setRecent(recentRes.data ?? [])
@@ -314,19 +311,13 @@ export default function SyncPanel() {
           </div>
         ))}
         <div style={s.stat}>
-          <div style={s.num}>{stats.pending}</div>
-          <div style={s.slbl}>Pending changes</div>
-          <button style={s.infoBtn} onClick={() => setShowPending(true)} title="What are pending changes?">ℹ</button>
-        </div>
-        <div style={s.stat}>
           <div style={s.num}>{stats.conflicts}</div>
           <div style={s.slbl}>Unresolved conflicts</div>
           <button style={s.infoBtn} onClick={() => setShowConflicts(true)} title="View conflicts">ℹ</button>
         </div>
       </div>
 
-      {showPending && <PendingModal onClose={() => setShowPending(false)} />}
-      {showConflicts && <ConflictModal pending={stats.pending} onClose={() => setShowConflicts(false)} />}
+      {showConflicts && <ConflictModal pending={0} onClose={() => setShowConflicts(false)} />}
 
       <h3 style={s.h3}>Recent activity</h3>
       {recent.length === 0

@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 process.title = 'claudesync-agent'
 import { hostname, platform, networkInterfaces } from 'os'
+import { readdirSync, readFileSync } from 'fs'
+import { join, relative } from 'path'
 import { createClient } from '@supabase/supabase-js'
-import chokidar from 'chokidar'
 import { loadConfig } from './lib/config.js'
-import { ApiClient } from './lib/api.js'
-import { applyChange } from './lib/applier.js'
-import { startWatcher } from './lib/watcher.js'
-import { loadHashCache, saveHashCache } from './lib/hash-cache.js'
+import { ApiClient, sha256 } from './lib/api.js'
+import { isAllowed, CHOKIDAR_IGNORE } from './lib/watcher.js'
+import { sanitizePluginPaths, sanitizeHomePath } from './lib/sanitize-plugin-paths.js'
 
-const POLL_INTERVAL_MS = 30_000
+const HEARTBEAT_INTERVAL_MS = 30_000
 
 function getMacAddress() {
   const nets = networkInterfaces()
-  // Sort so physical interfaces (en*, eth*) come before virtual/tunnel ones.
-  // Within each group sort alphabetically so en0 always beats en1, etc.
-  // This makes the result deterministic regardless of OS iteration order or
-  // whether VPN/Docker interfaces are present.
   const sorted = Object.keys(nets).sort((a, b) => {
     const aPhys = /^(en|eth)\d/.test(a)
     const bPhys = /^(en|eth)\d/.test(b)
@@ -33,15 +29,28 @@ function getMacAddress() {
   return null
 }
 
-async function pullAndApply({ api, deviceId, claudePath, hashCache }) {
-  try {
-    const { items } = await api.pull(deviceId)
-    for (const item of items) {
-      await applyChange(item, claudePath, hashCache)
+function collectLocalFiles(claudePath) {
+  const results = []
+  function walk(dir) {
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (CHOKIDAR_IGNORE.some(re => re.test(full))) continue
+        walk(full)
+      } else {
+        const rel = relative(claudePath, full)
+        if (!isAllowed(rel)) continue
+        try {
+          const content = readFileSync(full)
+          results.push({ path: rel, hash: sha256(content) })
+        } catch { /* skip unreadable */ }
+      }
     }
-  } catch (err) {
-    console.error('[pull error]', err.message)
   }
+  walk(claudePath)
+  return results
 }
 
 async function main() {
@@ -51,7 +60,6 @@ async function main() {
 
   const api = new ApiClient({ supabaseUrl, agentToken })
 
-  // 1. Register device + get device_id
   console.log('[startup] registering device...')
   const { device_id: deviceId } = await api.heartbeat({
     hostname: hostname(),
@@ -62,21 +70,44 @@ async function main() {
   })
   console.log(`[startup] device_id: ${deviceId}`)
 
-  const hashCache = loadHashCache()
-
-  // 2. Pull any changes missed while offline
-  console.log('[startup] pulling queued changes...')
-  await pullAndApply({ api, deviceId, claudePath, hashCache })
-
-  // 3. Subscribe to Realtime broadcast channel for instant push notifications
   const supabase = createClient(supabaseUrl, config.supabaseAnonKey ?? 'anon-placeholder', {
     realtime: { params: { eventsPerSecond: 10 } },
   })
 
   supabase
     .channel(`device:${deviceId}`)
-    .on('broadcast', { event: 'change' }, async () => {
-      await pullAndApply({ api, deviceId, claudePath, hashCache })
+    .on('broadcast', { event: 'discover' }, async () => {
+      console.log('[discover] running...')
+      try {
+        const localFiles = collectLocalFiles(claudePath)
+        const { diffs } = await api.discover(deviceId, localFiles)
+        console.log(`[discover] ${diffs} file(s) differ from server`)
+      } catch (err) {
+        console.error('[discover error]', err.message)
+      }
+    })
+    .on('broadcast', { event: 'sync' }, async ({ payload }) => {
+      const files = payload?.files ?? []
+      console.log(`[sync] syncing ${files.length} file(s)...`)
+      for (const filePath of files) {
+        const absPath = join(claudePath, filePath)
+        try {
+          let raw
+          try { raw = readFileSync(absPath) } catch { continue }
+          const content = sanitizeHomePath(sanitizePluginPaths(filePath, raw, claudePath), claudePath)
+          const hash = sha256(content)
+          await api.push({ deviceId, filePath, content, hash, operation: 'upsert' })
+          console.log(`[sync] pushed ${filePath}`)
+        } catch (err) {
+          console.error(`[sync] error pushing ${filePath}:`, err.message)
+        }
+      }
+      try {
+        await api.syncComplete(deviceId)
+        console.log('[sync] complete')
+      } catch (err) {
+        console.error('[sync] syncComplete error:', err.message)
+      }
     })
     .on('broadcast', { event: 'restart' }, () => {
       console.log('[restart] restart requested from dashboard — exiting')
@@ -84,18 +115,9 @@ async function main() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') console.log('[realtime] connected')
-      if (status === 'CHANNEL_ERROR') console.warn('[realtime] channel error — falling back to polling')
+      if (status === 'CHANNEL_ERROR') console.warn('[realtime] channel error')
     })
 
-  // 4. Poll as fallback (Realtime may not always be available)
-  setInterval(() => {
-    pullAndApply({ api, deviceId, claudePath, hashCache })
-  }, POLL_INTERVAL_MS)
-
-  // 5. Watch ~/.claude for local changes
-  startWatcher({ claudePath, deviceId, hashCache, api, chokidar, saveHashCache })
-
-  // 6. Heartbeat every 30s
   setInterval(async () => {
     try {
       await api.heartbeat({
@@ -103,11 +125,12 @@ async function main() {
         platform: platform(),
         claudePath,
         name: config.name ?? hostname(),
+        macAddress: getMacAddress(),
       })
     } catch (err) { console.error('[heartbeat error]', err.message) }
-  }, POLL_INTERVAL_MS)
+  }, HEARTBEAT_INTERVAL_MS)
 
-  console.log('[ready] ClaudeSync agent running')
+  console.log('[ready] ClaudeSync agent running (manual sync mode)')
 }
 
 main().catch(err => {

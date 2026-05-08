@@ -42,11 +42,23 @@ export class ApiClient {
     return res.json()
   }
 
-  async pull(deviceId) {
-    const res = await fetch(`${this.base}/sync-pull?device_id=${deviceId}`, {
+  async discover(deviceId, localFiles) {
+    const res = await fetch(`${this.base}/sync-discover`, {
+      method: 'POST',
       headers: this.headers,
+      body: JSON.stringify({ device_id: deviceId, local_files: localFiles }),
     })
-    if (!res.ok) throw new Error(`sync-pull failed: ${res.status}`)
+    if (!res.ok) throw new Error(`sync-discover failed: ${res.status}`)
+    return res.json()
+  }
+
+  async syncComplete(deviceId) {
+    const res = await fetch(`${this.base}/sync-complete`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({ device_id: deviceId }),
+    })
+    if (!res.ok) throw new Error(`sync-complete failed: ${res.status}`)
     return res.json()
   }
 }

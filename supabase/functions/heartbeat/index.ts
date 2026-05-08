@@ -28,61 +28,82 @@ serve(async (req) => {
 
   if (blocked) return errorResponse('Device is blocked', 403)
 
+  const fields = {
+    name: name ?? hostname,
+    hostname,
+    platform,
+    claude_path,
+    agent_version: agent_version ?? '1.0.0',
+    last_seen_at: new Date().toISOString(),
+  }
+
   let data: { id: string } | null = null
   let error: unknown = null
 
   if (mac_address) {
-    const { data: existing } = await supabase
+    // Try to find existing device by mac
+    const { data: byMac } = await supabase
       .from('devices')
       .select('id')
       .eq('user_id', userId)
       .eq('mac_address', mac_address)
       .maybeSingle()
 
-    if (existing) {
+    if (byMac) {
+      // Update existing device found by mac
       const res = await supabase
         .from('devices')
-        .update({
-          name: name ?? hostname,
-          hostname,
-          platform,
-          claude_path,
-          agent_version: agent_version ?? '1.0.0',
-          last_seen_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id)
+        .update(fields)
+        .eq('id', byMac.id)
         .select('id')
         .single()
       data = res.data; error = res.error
     } else {
-      const res = await supabase
+      // Fall back: find device registered before mac support (by hostname)
+      const { data: byHostname } = await supabase
         .from('devices')
-        .insert({
-          user_id: userId,
-          name: name ?? hostname,
-          hostname,
-          platform,
-          claude_path,
-          mac_address,
-          agent_version: agent_version ?? '1.0.0',
-          last_seen_at: new Date().toISOString(),
-        })
         .select('id')
-        .single()
-      data = res.data; error = res.error
+        .eq('user_id', userId)
+        .eq('hostname', hostname)
+        .is('mac_address', null)
+        .maybeSingle()
+
+      if (byHostname) {
+        // Update old device with mac_address
+        const res = await supabase
+          .from('devices')
+          .update({ ...fields, mac_address })
+          .eq('id', byHostname.id)
+          .select('id')
+          .single()
+        data = res.data; error = res.error
+
+        // Delete any duplicate row that was created via the broken insert path
+        if (data) {
+          await supabase
+            .from('devices')
+            .delete()
+            .eq('user_id', userId)
+            .eq('mac_address', mac_address)
+            .neq('id', data.id)
+        }
+      } else {
+        // No existing device — insert fresh
+        const res = await supabase
+          .from('devices')
+          .insert({ user_id: userId, mac_address, ...fields })
+          .select('id')
+          .single()
+        data = res.data; error = res.error
+      }
     }
   } else {
     const res = await supabase
       .from('devices')
-      .upsert({
-        user_id: userId,
-        name: name ?? hostname,
-        hostname,
-        platform,
-        claude_path,
-        agent_version: agent_version ?? '1.0.0',
-        last_seen_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,hostname' })
+      .upsert(
+        { user_id: userId, ...fields },
+        { onConflict: 'user_id,hostname' }
+      )
       .select('id')
       .single()
     data = res.data; error = res.error

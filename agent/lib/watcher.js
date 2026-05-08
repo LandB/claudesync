@@ -3,8 +3,7 @@ import { relative } from 'path'
 import { sha256 } from './api.js'
 import { sanitizePluginPaths, sanitizeHomePath } from './sanitize-plugin-paths.js'
 
-// Chokidar-level: skip entire subtrees for performance
-const CHOKIDAR_IGNORE = [
+export const CHOKIDAR_IGNORE = [
   /[/\\]\.git([/\\]|$)/,
   /[/\\]node_modules([/\\]|$)/,
   /[/\\]plugins[/\\]cache([/\\]|$)/,
@@ -30,7 +29,7 @@ const SYNC_ALLOWLIST = [
 
 const JUNK = [/\.DS_Store$/, /\.swp$/, /\.tmp$/, /~$/]
 
-function isAllowed(relPath) {
+export function isAllowed(relPath) {
   if (JUNK.some(re => re.test(relPath))) return false
   return SYNC_ALLOWLIST.some(re => re.test(relPath))
 }
