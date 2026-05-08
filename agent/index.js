@@ -13,9 +13,21 @@ const POLL_INTERVAL_MS = 30_000
 
 function getMacAddress() {
   const nets = networkInterfaces()
-  for (const name of Object.keys(nets)) {
+  // Sort so physical interfaces (en*, eth*) come before virtual/tunnel ones.
+  // Within each group sort alphabetically so en0 always beats en1, etc.
+  // This makes the result deterministic regardless of OS iteration order or
+  // whether VPN/Docker interfaces are present.
+  const sorted = Object.keys(nets).sort((a, b) => {
+    const aPhys = /^(en|eth)\d/.test(a)
+    const bPhys = /^(en|eth)\d/.test(b)
+    if (aPhys !== bPhys) return aPhys ? -1 : 1
+    return a.localeCompare(b)
+  })
+  for (const name of sorted) {
     for (const net of nets[name]) {
-      if (!net.internal && net.mac && net.mac !== '00:00:00:00:00:00') return net.mac
+      if (!net.internal && net.family === 'IPv4' && net.mac && net.mac !== '00:00:00:00:00:00') {
+        return net.mac
+      }
     }
   }
   return null

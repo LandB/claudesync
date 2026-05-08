@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { relative } from 'path'
 import { sha256 } from './api.js'
-import { sanitizePluginPaths } from './sanitize-plugin-paths.js'
+import { sanitizePluginPaths, sanitizeHomePath } from './sanitize-plugin-paths.js'
 
 // Chokidar-level: skip entire subtrees for performance
 const CHOKIDAR_IGNORE = [
@@ -59,7 +59,7 @@ export function startWatcher({ claudePath, deviceId, hashCache, api, chokidar, s
           const rawHash = sha256(raw)
           if (hashCache.get(filePath) === rawHash) return
           hashCache.set(filePath, rawHash)
-          const content = sanitizePluginPaths(filePath, raw, claudePath)
+          const content = sanitizeHomePath(sanitizePluginPaths(filePath, raw, claudePath), claudePath)
           const hash = sha256(content)
           await api.push({ deviceId, filePath, content, hash, operation: 'upsert' })
           saveHashCache?.(hashCache)

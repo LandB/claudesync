@@ -289,16 +289,7 @@ async function handleDeleteFile(userId: string, args: Record<string,string>, sup
   await supabase.from('sync_files')
     .update({ deleted: true, updated_at: new Date().toISOString() })
     .eq('user_id', userId).eq('path', file_path)
-  const { data: devices } = await supabase.from('devices').select('id').eq('user_id', userId)
-  if (devices?.length) {
-    await supabase.from('change_queue').insert(
-      devices.map((d: {id: string}) => ({
-        user_id: userId, target_device: d.id, file_path,
-        operation: 'delete', storage_path: meta.storage_path, hash: '',
-      }))
-    )
-  }
-  return toolOk(`Deleted ${file_path} — queued removal on ${devices?.length ?? 0} device(s)`)
+  return toolOk(`Deleted ${file_path} from server`)
 }
 
 async function handleDeleteAllFiles(userId: string, _args: unknown, supabase: SupabaseClient) {
@@ -310,17 +301,7 @@ async function handleDeleteAllFiles(userId: string, _args: unknown, supabase: Su
   await supabase.from('sync_files')
     .update({ deleted: true, updated_at: new Date().toISOString() })
     .eq('user_id', userId).eq('deleted', false)
-  const { data: devices } = await supabase.from('devices').select('id').eq('user_id', userId)
-  if (devices?.length) {
-    const rows = allFiles.flatMap((f: {path: string; storage_path: string}) =>
-      devices.map((d: {id: string}) => ({
-        user_id: userId, target_device: d.id, file_path: f.path,
-        operation: 'delete', storage_path: f.storage_path, hash: '',
-      }))
-    )
-    if (rows.length) await supabase.from('change_queue').insert(rows)
-  }
-  return toolOk(`Deleted ${allFiles.length} file(s) — queued removal on ${devices?.length ?? 0} device(s)`)
+  return toolOk(`Deleted ${allFiles.length} file(s) from server`)
 }
 
 async function dispatchTool(userId: string, name: string, args: Record<string,string>, supabase: SupabaseClient) {

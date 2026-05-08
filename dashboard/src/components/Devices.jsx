@@ -28,6 +28,7 @@ export default function Devices() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [resyncing, setResyncing] = useState({})
+  const [resyncingAll, setResyncingAll] = useState(false)
 
   async function load(initial = false) {
     if (initial) setLoading(true)
@@ -43,6 +44,15 @@ export default function Devices() {
     setResyncing(r => ({ ...r, [id]: true }))
     await supabase.functions.invoke('sync-resync', { body: { device_id: id } })
     setResyncing(r => ({ ...r, [id]: false }))
+  }
+
+  async function resyncAll() {
+    if (!devices.length) return
+    setResyncingAll(true)
+    await Promise.all(devices.map(d =>
+      supabase.functions.invoke('sync-resync', { body: { device_id: d.id } })
+    ))
+    setResyncingAll(false)
   }
 
   async function remove(id) {
@@ -68,7 +78,19 @@ export default function Devices() {
     <div style={s.wrap}>
       <div style={s.head}>
         <h2 style={s.h2}>Devices ({devices.length})</h2>
-        <button style={s.refresh} onClick={() => load(true)}>↻ Refresh</button>
+        <div style={{ display:'flex', gap:'0.5rem' }}>
+          {devices.length > 0 && (
+            <button
+              style={s.refresh}
+              onClick={resyncAll}
+              disabled={resyncingAll}
+              title="Queue all server files for delivery to every device"
+            >
+              {resyncingAll ? 'Queuing…' : '↓ Pull all from server'}
+            </button>
+          )}
+          <button style={s.refresh} onClick={() => load(true)}>↻ Refresh</button>
+        </div>
       </div>
       {loading && <div style={s.empty}>Loading…</div>}
       {!loading && devices.length === 0 && <div style={s.empty}>No devices. Install the agent on a machine to get started.</div>}

@@ -1,6 +1,7 @@
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 const PLACEHOLDER = '{{CLAUDE_PATH}}'
+const HOME_PLACEHOLDER = '{{USER_HOME}}'
 
 const REGISTRY_FILES = new Set([
   'plugins/known_marketplaces.json',
@@ -86,4 +87,25 @@ export function expandPluginPaths(filePath, content, claudePath) {
   }
 
   return content
+}
+
+/**
+ * Replaces the machine-specific home directory path with {{USER_HOME}} before pushing.
+ * Applies to all text files so absolute paths never leak to the server.
+ */
+export function sanitizeHomePath(content, claudePath) {
+  const homePath = dirname(claudePath).replace(/\\/g, '/')
+  const text = content.toString('utf8')
+  if (!text.includes(homePath)) return content
+  return Buffer.from(text.replaceAll(homePath, HOME_PLACEHOLDER))
+}
+
+/**
+ * Expands {{USER_HOME}} back to the local machine's home directory after pulling.
+ */
+export function expandHomePath(content, claudePath) {
+  const homePath = dirname(claudePath).replace(/\\/g, '/')
+  const text = content.toString('utf8')
+  if (!text.includes(HOME_PLACEHOLDER)) return content
+  return Buffer.from(text.replaceAll(HOME_PLACEHOLDER, homePath))
 }

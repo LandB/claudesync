@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
-import { expandPluginPaths } from './sanitize-plugin-paths.js'
+import { expandPluginPaths, expandHomePath } from './sanitize-plugin-paths.js'
 
 const APPLY_BLOCKLIST = [
   /^plugins[/\\]marketplaces([/\\]|$)/,
@@ -39,7 +39,8 @@ export async function applyChange(item, claudePath, hashCache) {
     return
   }
 
-  const content = expandPluginPaths(item.file_path, Buffer.from(await res.arrayBuffer()), claudePath)
+  const raw = Buffer.from(await res.arrayBuffer())
+  const content = expandHomePath(expandPluginPaths(item.file_path, raw, claudePath), claudePath)
   mkdirSync(dirname(absPath), { recursive: true })
   writeFileSync(absPath, content)
   hashCache.set(item.file_path, item.hash)
