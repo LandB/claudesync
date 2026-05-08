@@ -12,8 +12,10 @@ const s = {
   name:    { fontWeight:'600', color:'#fff', fontSize:'0.95rem' },
   meta:    { color:'#666', fontSize:'0.8rem', marginTop:'2px', lineHeight:'1.6' },
   del:     { marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', fontSize:'1.1rem', padding:'4px 8px', borderRadius:'4px' },
-  pull:    { background:'none', border:'1px solid #252525', color:'#555', cursor:'pointer', fontSize:'0.75rem', padding:'3px 9px', borderRadius:'4px', marginTop:'0.4rem' },
-  pulling: { background:'none', border:'1px solid #252525', color:'#444', fontSize:'0.75rem', padding:'3px 9px', borderRadius:'4px', marginTop:'0.4rem', cursor:'default' },
+  pull:        { background:'#0f1f2e', border:'1px solid #1e4976', color:'#60a5fa', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
+  restart:     { background:'#1a1a0a', border:'1px solid #4a3f00', color:'#facc15', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
+  pullBusy:    { background:'#0f1f2e', border:'1px solid #1e4976', color:'#3b7ab5', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px', cursor:'default' },
+  restartBusy: { background:'#1a1a0a', border:'1px solid #4a3f00', color:'#a38a00', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px', cursor:'default' },
 }
 
 function ago(ts) {
@@ -113,9 +115,9 @@ export default function Devices() {
                 Last seen: {ago(d.last_seen_at)}<br />
                 <span style={{ color:'#444', fontSize:'0.75rem' }}>{d.id}</span>
               </div>
-              <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
+              <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginTop:'0.5rem' }}>
                 <button
-                  style={resyncing[d.id] ? s.pulling : s.pull}
+                  style={resyncing[d.id] ? s.pullBusy : s.pull}
                   onClick={() => resync(d.id)}
                   disabled={!!resyncing[d.id]}
                   title="Queue all server files for delivery to this device"
@@ -123,7 +125,7 @@ export default function Devices() {
                   {resyncing[d.id] ? 'Queuing…' : '↓ Pull from server'}
                 </button>
                 <button
-                  style={restarting[d.id] ? s.pulling : s.pull}
+                  style={restarting[d.id] ? s.restartBusy : s.restart}
                   onClick={() => restart(d.id)}
                   disabled={!!restarting[d.id]}
                   title="Send restart signal to agent on this device"
