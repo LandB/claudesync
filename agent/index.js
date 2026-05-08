@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 process.title = 'claudesync-agent'
 import { hostname, platform, networkInterfaces } from 'os'
-import { readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 'fs'
 import { join, relative, dirname } from 'path'
+import { execSync, spawn } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
 import { loadConfig } from './lib/config.js'
 import { ApiClient, sha256 } from './lib/api.js'
@@ -29,6 +30,15 @@ function getMacAddress() {
   return null
 }
 
+function findClaudeBin() {
+  try {
+    const cmd = process.platform === 'win32' ? 'where claude' : 'which claude'
+    return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim().split('\n')[0].trim()
+  } catch {
+    return null
+  }
+}
+
 function collectLocalFiles(claudePath) {
   const results = []
   function walk(dir) {
@@ -53,10 +63,68 @@ function collectLocalFiles(claudePath) {
   return results
 }
 
+async function installMissingPlugins(claudePath, claudeBin) {
+  if (!claudeBin) {
+    console.warn('[plugins] claude binary not found — skipping plugin install')
+    return
+  }
+
+  const registryPath = join(claudePath, 'plugins', 'installed_plugins.json')
+  if (!existsSync(registryPath)) return
+
+  let registry
+  try {
+    registry = JSON.parse(readFileSync(registryPath, 'utf8'))
+  } catch {
+    console.warn('[plugins] failed to parse installed_plugins.json')
+    return
+  }
+
+  const plugins = registry?.plugins ?? {}
+  const entries = Object.entries(plugins)
+  if (!entries.length) return
+
+  console.log(`[plugins] checking ${entries.length} plugin(s)...`)
+
+  for (const [key, installs] of entries) {
+    const install = Array.isArray(installs) ? installs[0] : installs
+    if (!install) continue
+
+    // Check if cache dir exists — if so, already installed
+    if (install.installPath && existsSync(install.installPath)) continue
+
+    // key is "namespace@name" → install "namespace/name"
+    const pluginId = key.replace('@', '/')
+    console.log(`[plugins] installing ${pluginId}...`)
+
+    await new Promise((resolve) => {
+      const proc = spawn(claudeBin, ['plugin', 'install', pluginId], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env },
+      })
+      proc.stdout.on('data', d => process.stdout.write(`[plugins] ${d}`))
+      proc.stderr.on('data', d => process.stderr.write(`[plugins] ${d}`))
+      proc.on('close', (code) => {
+        if (code !== 0) console.error(`[plugins] install failed for ${pluginId} (exit ${code})`)
+        else console.log(`[plugins] installed ${pluginId}`)
+        resolve()
+      })
+      proc.on('error', (err) => {
+        console.error(`[plugins] spawn error for ${pluginId}: ${err.message}`)
+        resolve()
+      })
+    })
+  }
+}
+
 async function main() {
   const configPath = process.env.CLAUDESYNC_CONFIG
   const config = loadConfig(configPath)
   const { supabaseUrl, agentToken, claudePath } = config
+
+  const claudeBin = findClaudeBin()
+  if (claudeBin) console.log(`[startup] claude bin: ${claudeBin}`)
+  else console.warn('[startup] claude binary not found — plugin auto-install disabled')
 
   const api = new ApiClient({ supabaseUrl, agentToken })
 
@@ -136,6 +204,7 @@ async function main() {
           }
         }
         console.log(`[snapshot] done — ${pulled} pulled`)
+        await installMissingPlugins(claudePath, claudeBin)
       } catch (err) {
         console.error('[snapshot error]', err.message)
       }
