@@ -76,8 +76,14 @@ function PendingPanel({ device, onSyncDone }) {
   async function sync() {
     if (!selected.size) return
     setSyncing(true)
-    await supabase.functions.invoke('sync-trigger', {
-      body: { device_id: device.id, event: 'sync', payload: { files: [...selected] } },
+    await new Promise((resolve) => {
+      const ch = supabase.channel(`device:${device.id}`)
+      ch.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          ch.send({ type: 'broadcast', event: 'sync', payload: { files: [...selected] } })
+            .finally(() => { supabase.removeChannel(ch); resolve() })
+        }
+      })
     })
     // Clear local state optimistically — agent will call sync-complete
     setDiffs([])
@@ -158,16 +164,25 @@ export default function Devices() {
     setPendingCounts(counts)
   }
 
+  async function broadcastToDevice(deviceId, event, payload = {}) {
+    await new Promise((resolve) => {
+      const ch = supabase.channel(`device:${deviceId}`)
+      ch.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          ch.send({ type: 'broadcast', event, payload })
+            .finally(() => { supabase.removeChannel(ch); resolve() })
+        }
+      })
+    })
+  }
+
   async function discover(id) {
     setDiscovering(d => ({ ...d, [id]: true }))
-    await supabase.functions.invoke('sync-trigger', {
-      body: { device_id: id, event: 'discover' },
-    })
-    // Poll briefly for results
+    await broadcastToDevice(id, 'discover')
     setTimeout(async () => {
       await loadPendingCounts(devices)
       setDiscovering(d => ({ ...d, [id]: false }))
-    }, 3000)
+    }, 4000)
   }
 
   async function restart(id) {
