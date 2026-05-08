@@ -245,7 +245,7 @@ export default function Devices() {
     const { data } = await supabase
       .from('devices')
       .select('*')
-      .order('last_seen_at', { ascending: false })
+      .order('created_at', { ascending: true })
     setDevices(data ?? [])
     if (initial) setLoading(false)
   }
