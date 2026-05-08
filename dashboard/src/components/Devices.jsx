@@ -25,10 +25,15 @@ const s = {
   badge:       (n) => ({ fontSize:'0.7rem', padding:'1px 7px', borderRadius:'10px', background: n > 0 ? '#1e3a1e' : '#1a1a1a', color: n > 0 ? '#4ade80' : '#555', marginLeft:'0.4rem' }),
   notChecked:  { fontSize:'0.75rem', color:'#555', fontStyle:'italic' },
   upToDate:    { fontSize:'0.75rem', color:'#22c55e' },
-  fileRow:     { display:'flex', alignItems:'center', gap:'0.5rem', padding:'3px 0', borderBottom:'1px solid #1a1a1a' },
-  filePath:    { fontFamily:'monospace', fontSize:'0.78rem', color:'#e8e8e8', flex:1 },
+  table:       { width:'100%', borderCollapse:'collapse', fontSize:'0.82rem' },
+  td:          { padding:'3px 0', borderBottom:'1px solid #1a1a1a', verticalAlign:'middle' },
+  groupRow:    { cursor:'pointer', userSelect:'none' },
+  groupPath:   { fontFamily:'monospace', color:'#e8e8e8', display:'flex', alignItems:'center', gap:'0.4rem' },
+  treeBadge:   { fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background:'#252525', color:'#666', fontFamily:'monospace' },
+  chevron:     { fontSize:'0.65rem', color:'#555', width:'10px', display:'inline-block' },
+  dimPath:     { fontFamily:'monospace', color:'#888', fontSize:'0.8rem' },
   fileStatus:  (isNew) => ({ fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background: isNew ? '#12202d' : '#1c1209', color: isNew ? '#60a5fa' : '#fb923c' }),
-  checkbox:    { accentColor:'#a78bfa', cursor:'pointer' },
+  checkbox:    { accentColor:'#a78bfa', cursor:'pointer', marginRight:'4px' },
   syncBar:     { display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:'0.5rem' },
   selectAll:   { fontSize:'0.75rem', color:'#666', cursor:'pointer', background:'none', border:'none', padding:0 },
 }
@@ -41,9 +46,93 @@ function ago(ts) {
   return `${Math.floor(s/86400)}d ago`
 }
 
+function buildDiffTree(files) {
+  const root = { children: new Map(), files: [] }
+  for (const f of files) {
+    const parts = f.file_path.split('/')
+    let node = root
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i]
+      if (!node.children.has(seg)) {
+        node.children.set(seg, { name: seg, path: parts.slice(0, i + 1).join('/'), children: new Map(), files: [] })
+      }
+      node = node.children.get(seg)
+    }
+    node.files.push(f)
+  }
+  return root
+}
+
+function collectPaths(node) {
+  const paths = node.files.map(f => f.file_path)
+  for (const c of node.children.values()) paths.push(...collectPaths(c))
+  return paths
+}
+
+function countDiffs(node) {
+  let n = node.files.length
+  for (const c of node.children.values()) n += countDiffs(c)
+  return n
+}
+
+function renderDiffTree(node, depth, expanded, toggle, selected, onTogglePath, onToggleDir) {
+  const rows = []
+  const indent = depth * 14
+
+  for (const dir of [...node.children.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    const open = expanded.has(dir.path)
+    const dirPaths = collectPaths(dir)
+    const allSelected = dirPaths.length > 0 && dirPaths.every(p => selected.has(p))
+    const someSelected = dirPaths.some(p => selected.has(p))
+    rows.push(
+      <tr key={dir.path} style={s.groupRow}>
+        <td style={s.td}>
+          <span style={{ ...s.groupPath, paddingLeft: indent }}>
+            <input type="checkbox" style={s.checkbox}
+              checked={allSelected}
+              ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
+              onChange={() => onToggleDir(dirPaths, allSelected)}
+              onClick={e => e.stopPropagation()}
+            />
+            <span onClick={() => toggle(dir.path)}>
+              <span style={s.chevron}>{open ? '▾' : '▸'}</span>
+              <span>{dir.name}/</span>
+              <span style={s.treeBadge}>{countDiffs(dir)}</span>
+            </span>
+          </span>
+        </td>
+        <td style={{ ...s.td, textAlign:'right' }} onClick={() => toggle(dir.path)} />
+      </tr>
+    )
+    if (open) rows.push(...renderDiffTree(dir, depth + 1, expanded, toggle, selected, onTogglePath, onToggleDir))
+  }
+
+  for (const f of [...node.files].sort((a, b) => a.file_path.localeCompare(b.file_path))) {
+    const name = depth > 0 ? f.file_path.split('/').pop() : f.file_path
+    rows.push(
+      <tr key={f.file_path}>
+        <td style={{ ...s.td, paddingLeft: indent || undefined }}>
+          <span style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
+            <input type="checkbox" style={s.checkbox}
+              checked={selected.has(f.file_path)}
+              onChange={() => onTogglePath(f.file_path)}
+            />
+            <span style={depth > 0 ? s.dimPath : { fontFamily:'monospace', fontSize:'0.78rem', color:'#e8e8e8' }}>{name}</span>
+          </span>
+        </td>
+        <td style={{ ...s.td, textAlign:'right' }}>
+          <span style={s.fileStatus(!f.server_hash)}>{f.server_hash ? 'modified' : 'new'}</span>
+        </td>
+      </tr>
+    )
+  }
+  return rows
+}
+
 function PendingPanel({ device, onSyncDone }) {
   const [diffs, setDiffs] = useState(null)
   const [selected, setSelected] = useState(new Set())
+  const [expanded, setExpanded] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
@@ -61,8 +150,25 @@ function PendingPanel({ device, onSyncDone }) {
     setSelected(new Set(items.map(d => d.file_path)))
   }
 
-  function toggle(path) {
+  function togglePath(path) {
     setSelected(prev => {
+      const next = new Set(prev)
+      next.has(path) ? next.delete(path) : next.add(path)
+      return next
+    })
+  }
+
+  function toggleDir(paths, allSelected) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (allSelected) paths.forEach(p => next.delete(p))
+      else paths.forEach(p => next.add(p))
+      return next
+    })
+  }
+
+  function toggleExpanded(path) {
+    setExpanded(prev => {
       const next = new Set(prev)
       next.has(path) ? next.delete(path) : next.add(path)
       return next
@@ -104,20 +210,11 @@ function PendingPanel({ device, onSyncDone }) {
           <span style={s.badge(diffs.length)}>{diffs.length}</span>
         </span>
       </div>
-      <div>
-        {diffs.map(d => (
-          <div key={d.file_path} style={s.fileRow}>
-            <input
-              type="checkbox"
-              style={s.checkbox}
-              checked={selected.has(d.file_path)}
-              onChange={() => toggle(d.file_path)}
-            />
-            <span style={s.filePath}>{d.file_path}</span>
-            <span style={s.fileStatus(!d.server_hash)}>{d.server_hash ? 'modified' : 'new'}</span>
-          </div>
-        ))}
-      </div>
+      <table style={s.table}>
+        <tbody>
+          {renderDiffTree(buildDiffTree(diffs), 0, expanded, toggleExpanded, selected, togglePath, toggleDir)}
+        </tbody>
+      </table>
       <div style={s.syncBar}>
         <button style={s.selectAll} onClick={toggleAll}>
           {selected.size === diffs.length ? 'Deselect all' : 'Select all'}
