@@ -52,14 +52,14 @@ The fastest way to get going. Sign up, install the agent on each machine, done.
 **macOS / Linux:**
 
 ```bash
-curl -fsSL https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/install-script?token=YOUR_TOKEN | bash
+curl -fsSL https://claudesync.netlify.app/api/install-script?token=YOUR_TOKEN | bash
 ```
 
 **Windows (PowerShell, run as Administrator):**
 
 ```powershell
 $tmp="$env:TEMP\cs-install.ps1"
-irm "https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/install-script?token=YOUR_TOKEN&platform=win" -OutFile $tmp
+irm "https://claudesync.netlify.app/api/install-script?token=YOUR_TOKEN&platform=win" -OutFile $tmp
 & $tmp
 ```
 
@@ -69,7 +69,7 @@ The agent installs itself, auto-starts on login, and registers with the dashboar
 
 ```bash
 claude mcp add --transport http claudesync \
-  https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/mcp \
+  https://claudesync.netlify.app/api/mcp \
   --header 'Authorization: Bearer YOUR_TOKEN' \
   --scope user
 ```
