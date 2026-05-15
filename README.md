@@ -1,8 +1,111 @@
 # ClaudeSync
 
-> Keep your Claude Code environment identical across every machine.
+> Your Claude Code config, everywhere you work.
 
-ClaudeSync syncs your `~/.claude` directory — CLAUDE.md, skills, plugins, settings — across all your devices. A lightweight agent on each machine connects via Supabase Realtime and waits for commands from the dashboard. Sync is fully manual: you decide what to push and when to pull.
+ClaudeSync syncs your `~/.claude` directory — CLAUDE.md, skills, plugins, settings — between machines and teammates. A lightweight agent on each machine connects via Supabase Realtime and waits for commands from a web dashboard. Sync is fully manual: you decide what to push and when to pull.
+
+**Built for three things:**
+
+- 🔄 **Stay in sync across your own machines** — laptop, desktop, work box. Edit a skill once, pull it everywhere.
+- 🚀 **Set up a new machine in 60 seconds** — install the agent, hit "Send files to this machine," and your entire Claude Code environment is there. No more "wait, where did I put that CLAUDE.md?"
+- 👥 **Share settings across a team** — a single source of truth for skills, prompts, and plugins that everyone on the team pulls from. Onboard new hires by handing them a token.
+
+**[→ Try it at claudesync.netlify.app](https://claudesync.netlify.app/)** — free, no setup.
+
+![ClaudeSync dashboard](docs/demo-recording.gif)
+
+---
+
+## Use cases
+
+### 🔄 Personal multi-device sync
+
+You work on a laptop at the coffee shop and a desktop at home. You add a new skill on one — and then forget it exists when you sit down at the other. ClaudeSync gives you one dashboard for both machines: discover what's different, push the skill from your laptop, pull it to your desktop. Same workflow for CLAUDE.md tweaks, custom plugins, settings changes.
+
+### 🚀 New machine setup in 60 seconds
+
+The fastest way to bootstrap Claude Code on a fresh install. Run the agent install command, open the dashboard, hit **Send files to this machine** — your entire `~/.claude` directory is restored. Plugins auto-install. Skills appear. CLAUDE.md is there. No copying dotfiles, no `scp`, no "which version was the latest one?"
+
+Useful for: setting up a new work laptop, spinning up a dev VM, recovering after a reformat, or trying out Claude Code on a cloud instance.
+
+### 👥 Team-shared settings
+
+One ClaudeSync account becomes the source of truth for your team's Claude Code setup. Everyone installs the agent with the team's token; everyone pulls the same approved skills, prompts, and plugin set. When you update the team's CLAUDE.md or publish a new internal skill, teammates pull it on demand.
+
+Practical setups:
+- **Shared team token** — simplest. Everyone reads from the same account. Good for small teams who trust each other; one person curates and the rest pull.
+- **Per-user tokens + a "team" device** — more controlled. Each engineer has their own personal sync, plus pulls from a designated team account. Personal customizations stay personal, team standards stay synced.
+- **Onboarding** — hand a new hire the install command. Five minutes later they have the same Claude Code environment as the rest of the team. Skip the "here's our internal prompts doc, copy-paste these into your CLAUDE.md" ritual.
+
+> **Note on team use:** the hosted instance is fine for evaluation and small teams. For anything sensitive, self-host — it's the same backend, on infrastructure you control.
+
+---
+
+## Quick start (hosted)
+
+The fastest way to get going. Sign up, install the agent on each machine, done.
+
+1. **Sign up** at [claudesync.netlify.app](https://claudesync.netlify.app/)
+2. Open **Token & Install**, copy the command for your platform
+3. Run it on every machine you want to sync
+
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/install-script?token=YOUR_TOKEN | bash
+```
+
+**Windows (PowerShell, run as Administrator):**
+
+```powershell
+$tmp="$env:TEMP\cs-install.ps1"
+irm "https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/install-script?token=YOUR_TOKEN&platform=win" -OutFile $tmp
+& $tmp
+```
+
+The agent installs itself, auto-starts on login, and registers with the dashboard within a few seconds. Open the dashboard, hit **Discover files** on one of your devices, pick what to sync, and push it. On your other machine, hit **Send files to this machine**.
+
+**Optional — add the MCP server to Claude Code:**
+
+```bash
+claude mcp add --transport http claudesync \
+  https://pkiufpjrwcdvvcpxdubf.supabase.co/functions/v1/mcp \
+  --header 'Authorization: Bearer YOUR_TOKEN' \
+  --scope user
+```
+
+---
+
+## What ClaudeSync stores (and what it doesn't)
+
+You're trusting the hosted instance with files from your `~/.claude` directory. Here's exactly what that means.
+
+**What gets synced:**
+
+- `CLAUDE.md` and any project-level markdown configs you explicitly add
+- Skills (`~/.claude/skills/`)
+- Plugin definitions — the install manifest, not vendored code
+- Settings files (`settings.json`, etc.)
+
+**What never leaves your machine:**
+
+- Conversation history and chat transcripts
+- API keys, OAuth tokens, or anything in your shell environment
+- Files outside `~/.claude`
+- Anything matched by the agent's built-in ignore rules (`.env`, `*.key`, `*.pem`, credentials directories)
+
+**How it's protected:**
+
+- All data sits in Supabase Postgres + Storage with **Row Level Security**. Every query is scoped to your user — there is no path by which one user can read another user's files.
+- The agent authenticates with a per-user bearer token that you can rotate or revoke from the dashboard at any time.
+- Storage buckets are private; download URLs are short-lived signed URLs.
+- Paths are tokenized on push (`{{USER_HOME}}`, `{{CLAUDE_PATH}}`) so usernames and install locations don't leak between machines.
+
+**If you'd rather not trust us with any of this:** the entire backend self-hosts on Supabase's free tier in about 10 minutes. Skip to [Self-host](#self-host).
+
+**Caveat — please read your skills before syncing.** ClaudeSync doesn't inspect file contents. If you've pasted an API key into a CLAUDE.md as a one-off, it'll get synced. Use the Discover step to review what's about to upload.
+
+---
 
 ## How it works
 
@@ -28,46 +131,18 @@ Dashboard                   Supabase                    Agent (each device)
 ## Stack
 
 | Layer | Tech |
-|---|---|
+| --- | --- |
 | Database | Supabase Postgres + RLS |
 | Storage | Supabase Storage (private, per-user) |
 | Realtime | Supabase Realtime broadcast |
 | Edge Functions | Deno (Supabase) |
 | Dashboard | React + Vite → Netlify |
-| Agent | Node.js (no file watcher — event-driven) |
-
-## Quick start
-
-1. **Sign up** at your ClaudeSync dashboard URL
-2. Go to **Token & Install**, copy the install command for your platform
-3. Run it on each machine — the agent installs itself and auto-starts
-
-**macOS / Linux:**
-```bash
-curl -fsSL https://<project>.supabase.co/functions/v1/install-script?token=YOUR_TOKEN | bash
-```
-
-**Windows (PowerShell, run as Administrator):**
-```powershell
-$tmp="$env:TEMP\cs-install.ps1"
-irm "https://<project>.supabase.co/functions/v1/install-script?token=YOUR_TOKEN&platform=win" -OutFile $tmp
-& $tmp
-```
-
-**Add MCP to Claude Code:**
-```bash
-claude mcp add --transport http claudesync \
-  https://<project>.supabase.co/functions/v1/mcp \
-  --header 'Authorization: Bearer YOUR_TOKEN' \
-  --scope user
-```
-
-Your token is shown in the dashboard under **Token & Install**.
+| Agent | Node.js (event-driven, no file watcher) |
 
 ## Dashboard
 
 | Page | What it does |
-|---|---|
+| --- | --- |
 | **Overview** | File count, device count, conflict count, recent activity tree |
 | **Devices** | Per-device discover / sync / snapshot / restart controls |
 | **Files** | Browse and edit synced files in-browser |
@@ -87,9 +162,23 @@ Each device card has three actions:
 
 Paths containing your home directory or claude path are tokenized on push (`{{USER_HOME}}`, `{{CLAUDE_PATH}}`) and expanded back on pull. Files sync cleanly between machines with different usernames or install locations.
 
+## Agent auto-start
+
+| Platform | Method |
+| --- | --- |
+| macOS | launchd (`~/Library/LaunchAgents/com.claudesync.agent.plist`) |
+| Linux | systemd user service (`~/.config/systemd/user/claudesync.service`) |
+| Windows | Task Scheduler + VBScript launcher (hidden window, restarts on failure) |
+| No systemd | Shell rc file (`~/.bashrc` / `~/.zshrc`) + nohup |
+
+---
+
 ## Self-host
 
+Run your own ClaudeSync instance. Everything fits inside Supabase's free tier for personal use.
+
 ### Prerequisites
+
 - [Supabase account](https://supabase.com) (free tier works)
 - [Netlify account](https://netlify.com) (free tier works)
 - [Supabase CLI](https://supabase.com/docs/guides/cli) — `brew install supabase/tap/supabase`
@@ -116,7 +205,9 @@ supabase db push
 ### 3. Deploy Edge Functions
 
 ```bash
-for fn in heartbeat sync-push sync-discover sync-complete sync-snapshot sync-trigger sync-pull bundle device-restart install-script mcp refresh-plugins; do
+for fn in heartbeat sync-push sync-discover sync-complete sync-snapshot \
+          sync-trigger sync-pull bundle device-restart install-script \
+          mcp refresh-plugins; do
   supabase functions deploy $fn
 done
 ```
@@ -128,26 +219,17 @@ Set env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), then:
 ```bash
 cd dashboard && npm install && npm run build
 netlify deploy --prod --dir=dist
-# or connect GitHub repo to Netlify for auto-deploy
+# or connect the GitHub repo to Netlify for auto-deploy
 ```
 
-### 5. Install agent
+### 5. Install the agent
 
-Get your token from the dashboard, then run the install command for your platform.
-
-## Agent auto-start
-
-| Platform | Method |
-|---|---|
-| macOS | launchd (`~/Library/LaunchAgents/com.claudesync.agent.plist`) |
-| Linux | systemd user service (`~/.config/systemd/user/claudesync.service`) |
-| Windows | Task Scheduler + VBScript launcher (hidden window, restarts on failure) |
-| No systemd | Shell rc file (`~/.bashrc` / `~/.zshrc`) + nohup |
+Get your token from your dashboard, then run the install command for your platform (same as the hosted quick start above, but pointing at your own Supabase project).
 
 ## Database schema
 
 | Table | Purpose |
-|---|---|
+| --- | --- |
 | `profiles` | One row per user, stores agent bearer token |
 | `devices` | Registered machines, heartbeat timestamp, MAC address |
 | `sync_files` | File metadata index (path, hash, storage_path) |
@@ -161,7 +243,7 @@ All tables have Row Level Security — users only access their own rows.
 ## Edge Functions
 
 | Function | Auth | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `heartbeat` | Agent token | Device registration + keepalive |
 | `sync-push` | Agent token | Push one file to storage + DB |
 | `sync-discover` | Agent token | Receive file list, write diffs to `discovery_results` |
@@ -189,10 +271,10 @@ claudesync/
 │       └── components/
 │           ├── AuthScreen.jsx
 │           ├── ConflictLog.jsx
-│           ├── Devices.jsx         # Device cards, discover/sync/snapshot
+│           ├── Devices.jsx
 │           ├── FileEditor.jsx
 │           ├── PluginManager.jsx
-│           ├── SyncPanel.jsx       # Overview + recent activity
+│           ├── SyncPanel.jsx
 │           └── TokenPanel.jsx
 ├── supabase/
 │   ├── functions/                  # Deno Edge Functions (one dir per function)
@@ -207,7 +289,11 @@ claudesync/
 3. `cd dashboard && npm install && npm run dev`
 4. `CLAUDESYNC_CONFIG=~/.claudesync/config.json node agent/index.js`
 
-PRs welcome. Open an issue first for large changes.
+PRs welcome. Open an issue first for large changes — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Found a security issue? Please report it privately — see [SECURITY.md](SECURITY.md) rather than opening a public issue.
 
 ## License
 
