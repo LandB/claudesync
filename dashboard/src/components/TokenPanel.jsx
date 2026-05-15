@@ -20,7 +20,6 @@ const s = {
 
 export default function TokenPanel() {
   const [token, setToken] = useState(null)
-  const [url] = useState(import.meta.env.VITE_SUPABASE_URL ?? '')
   const [copied, setCopied] = useState(false)
   const [copiedInstall, setCopiedInstall] = useState(false)
   const [copiedWin, setCopiedWin] = useState(false)
@@ -50,14 +49,16 @@ export default function TokenPanel() {
     setMsg({ ok: true, text: 'Token regenerated. All agents must be reinstalled.' })
   }
 
+  const API = 'https://claudesync.netlify.app/api'
+
   const installCmd = token
-    ? `curl -fsSL "${url}/functions/v1/install-script?token=${token}" | bash`
+    ? `curl -fsSL "${API}/install-script?token=${token}" | bash`
     : ''
   const winInstallCmd = token
-    ? `$tmp="$env:TEMP\\cs-install.ps1"; irm "${url}/functions/v1/install-script?token=${token}&platform=win" -OutFile $tmp; & $tmp`
+    ? `$tmp="$env:TEMP\\cs-install.ps1"\nirm "${API}/install-script?token=${token}&platform=win" -OutFile $tmp\n& $tmp`
     : ''
   const mcpCmd = token
-    ? `claude mcp add --transport http claudesync \\\n  ${url}/functions/v1/mcp \\\n  --header 'Authorization: Bearer ${token}' \\\n  --scope user`
+    ? `claude mcp add --transport http claudesync \\\n  ${API}/mcp \\\n  --header 'Authorization: Bearer ${token}' \\\n  --scope user`
     : ''
 
   return (
