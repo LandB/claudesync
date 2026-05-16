@@ -39,11 +39,11 @@ function findClaudeBin() {
   }
 }
 
-function collectLocalFiles(claudePath) {
+function collectLocalFiles(claudePath, agentsPath) {
   const results = []
   const visitedReal = new Set()
 
-  function walk(dir) {
+  function walk(dir, rootPath, prefix) {
     let realDir
     try { realDir = realpathSync(dir) } catch { return }
     if (visitedReal.has(realDir)) return
@@ -61,9 +61,9 @@ function collectLocalFiles(claudePath) {
       }
       if (isDir) {
         if (CHOKIDAR_IGNORE.some(re => re.test(full))) continue
-        walk(full)
+        walk(full, rootPath, prefix)
       } else if (isFile) {
-        const rel = relative(claudePath, full)
+        const rel = prefix + relative(rootPath, full)
         if (!isAllowed(rel)) continue
         try {
           const raw = readFileSync(full)
@@ -73,7 +73,9 @@ function collectLocalFiles(claudePath) {
       }
     }
   }
-  walk(claudePath)
+
+  walk(claudePath, claudePath, '')
+  if (existsSync(agentsPath)) walk(agentsPath, agentsPath, 'agents/')
   return results
 }
 
@@ -135,6 +137,7 @@ async function main() {
   const configPath = process.env.CLAUDESYNC_CONFIG
   const config = loadConfig(configPath)
   const { supabaseUrl, agentToken, claudePath } = config
+  const agentsPath = join(dirname(claudePath), '.agents')
 
   const claudeBin = findClaudeBin()
   if (claudeBin) console.log(`[startup] claude bin: ${claudeBin}`)
@@ -161,7 +164,7 @@ async function main() {
     .on('broadcast', { event: 'discover' }, async () => {
       console.log('[discover] running...')
       try {
-        const localFiles = collectLocalFiles(claudePath)
+        const localFiles = collectLocalFiles(claudePath, agentsPath)
         const { diffs } = await api.discover(deviceId, localFiles)
         console.log(`[discover] ${diffs} file(s) differ from server`)
       } catch (err) {
@@ -172,7 +175,7 @@ async function main() {
       const files = payload?.files ?? []
       console.log(`[sync] syncing ${files.length} file(s)...`)
       for (const filePath of files) {
-        const absPath = join(claudePath, filePath)
+        const absPath = filePath.startsWith('agents/') ? join(agentsPath, filePath.slice('agents/'.length)) : join(claudePath, filePath)
         try {
           let raw
           try { raw = readFileSync(absPath) } catch { continue }
@@ -208,7 +211,7 @@ async function main() {
             if (!dlRes.ok) { console.error(`[snapshot] download failed: ${f.path}`); continue }
             const raw = Buffer.from(await dlRes.arrayBuffer())
             const content = expandHomePath(expandPluginPaths(f.path, raw, claudePath), claudePath)
-            const absPath = join(claudePath, f.path)
+            const absPath = f.path.startsWith('agents/') ? join(agentsPath, f.path.slice('agents/'.length)) : join(claudePath, f.path)
             mkdirSync(dirname(absPath), { recursive: true })
             writeFileSync(absPath, content)
             console.log(`[snapshot] ${f.path}`)
@@ -240,7 +243,7 @@ async function main() {
             if (!dlRes.ok) { console.error(`[pull-files] download failed: ${f.path}`); continue }
             const raw = Buffer.from(await dlRes.arrayBuffer())
             const content = expandHomePath(expandPluginPaths(f.path, raw, claudePath), claudePath)
-            const absPath = join(claudePath, f.path)
+            const absPath = f.path.startsWith('agents/') ? join(agentsPath, f.path.slice('agents/'.length)) : join(claudePath, f.path)
             mkdirSync(dirname(absPath), { recursive: true })
             writeFileSync(absPath, content)
             console.log(`[pull-files] ${f.path}`)

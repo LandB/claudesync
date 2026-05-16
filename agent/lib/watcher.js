@@ -24,6 +24,7 @@ const SYNC_ALLOWLIST = [
   /^\.caveman-active$/,
   /^keybindings\.json$/,
   /^skills\//,
+  /^agents\/skills\//,
   /^plugins\//,   // plugins/cache already excluded by CHOKIDAR_IGNORE
 ]
 

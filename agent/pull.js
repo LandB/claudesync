@@ -9,6 +9,7 @@ import { expandPluginPaths, expandHomePath } from './lib/sanitize-plugin-paths.j
 const configPath = process.env.CLAUDESYNC_CONFIG
 const config = loadConfig(configPath)
 const { supabaseUrl, agentToken, claudePath } = config
+const agentsPath = join(dirname(claudePath), '.agents')
 
 async function fetchSnapshot() {
   const res = await fetch(`${supabaseUrl}/functions/v1/sync-snapshot`, {
@@ -32,7 +33,7 @@ async function main() {
   let pulled = 0, skipped = 0, failed = 0
 
   for (const f of files) {
-    const absPath = join(claudePath, f.path)
+    const absPath = f.path.startsWith('agents/') ? join(agentsPath, f.path.slice('agents/'.length)) : join(claudePath, f.path)
 
     // Files with path tokens are stored tokenized on the server so local hash
     // never matches. Fall through to re-download; localHash check still skips
