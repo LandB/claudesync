@@ -236,6 +236,7 @@ async function main() {
         })
         if (!res.ok) throw new Error(`sync-snapshot failed: ${res.status}`)
         const { files } = await res.json()
+        let pulledInstalledPlugins = false
         for (const f of files.filter(f => targetPaths.has(f.path))) {
           if (!f.download_url) continue
           try {
@@ -247,11 +248,13 @@ async function main() {
             mkdirSync(dirname(absPath), { recursive: true })
             writeFileSync(absPath, content)
             console.log(`[pull-files] ${f.path}`)
+            if (f.path === 'plugins/installed_plugins.json') pulledInstalledPlugins = true
           } catch (err) {
             console.error(`[pull-files] error ${f.path}:`, err.message)
           }
         }
         console.log('[pull-files] done')
+        if (pulledInstalledPlugins) await installMissingPlugins(claudePath, claudeBin)
       } catch (err) {
         console.error('[pull-files error]', err.message)
       }
