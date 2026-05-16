@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 process.title = 'claudesync-agent'
 import { hostname, platform, networkInterfaces } from 'os'
-import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync, statSync, realpathSync } from 'fs'
 import { join, relative, dirname } from 'path'
 import { execSync, spawn } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
@@ -41,15 +41,28 @@ function findClaudeBin() {
 
 function collectLocalFiles(claudePath) {
   const results = []
+  const visitedReal = new Set()
+
   function walk(dir) {
+    let realDir
+    try { realDir = realpathSync(dir) } catch { return }
+    if (visitedReal.has(realDir)) return
+    visitedReal.add(realDir)
+
     let entries
     try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
     for (const entry of entries) {
       const full = join(dir, entry.name)
-      if (entry.isDirectory()) {
+      let isDir = entry.isDirectory()
+      let isFile = entry.isFile()
+      if (entry.isSymbolicLink()) {
+        try { const st = statSync(full); isDir = st.isDirectory(); isFile = st.isFile() }
+        catch { continue }
+      }
+      if (isDir) {
         if (CHOKIDAR_IGNORE.some(re => re.test(full))) continue
         walk(full)
-      } else {
+      } else if (isFile) {
         const rel = relative(claudePath, full)
         if (!isAllowed(rel)) continue
         try {
