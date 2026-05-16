@@ -53,7 +53,8 @@ function collectLocalFiles(claudePath) {
         const rel = relative(claudePath, full)
         if (!isAllowed(rel)) continue
         try {
-          const content = readFileSync(full)
+          const raw = readFileSync(full)
+          const content = sanitizeHomePath(sanitizePluginPaths(rel, raw, claudePath), claudePath)
           results.push({ path: rel, hash: sha256(content) })
         } catch { /* skip unreadable */ }
       }
