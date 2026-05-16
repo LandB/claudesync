@@ -44,9 +44,13 @@ export default function FileEditor() {
   async function selectFile(file) {
     setSelected(file)
     setMsg(null)
-    const { data, error } = await supabase.storage.from('claude-env').download(file.storage_path)
-    if (error) { setContent('// Error loading file: ' + error.message); return }
-    const text = await data.text()
+    const { data: signed, error: signErr } = await supabase.storage
+      .from('claude-env')
+      .createSignedUrl(file.storage_path, 60)
+    if (signErr) { setContent('// Error loading file: ' + signErr.message); return }
+    const res = await fetch(signed.signedUrl, { cache: 'no-store' })
+    if (!res.ok) { setContent('// Error loading file: ' + res.status); return }
+    const text = await res.text()
     setContent(text)
     setOriginal(text)
   }
@@ -60,7 +64,7 @@ export default function FileEditor() {
       const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('')
 
       const { error: upErr } = await supabase.storage.from('claude-env')
-        .upload(selected.storage_path, bytes, { upsert: true, contentType: 'text/plain' })
+        .upload(selected.storage_path, bytes, { upsert: true, contentType: 'text/plain', cacheControl: '0' })
       if (upErr) throw upErr
 
       const { data: { user } } = await supabase.auth.getUser()

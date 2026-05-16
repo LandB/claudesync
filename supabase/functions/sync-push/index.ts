@@ -45,7 +45,7 @@ serve(async (req) => {
     const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0))
     const { error: uploadError } = await supabase.storage
       .from('claude-env')
-      .upload(storagePath, bytes, { upsert: true, contentType: 'text/plain' })
+      .upload(storagePath, bytes, { upsert: true, contentType: 'text/plain', cacheControl: '0' })
 
     if (uploadError) return errorResponse(uploadError.message, 500)
 
