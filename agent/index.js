@@ -259,6 +259,29 @@ async function main() {
         console.error('[pull-files error]', err.message)
       }
     })
+    .on('broadcast', { event: 'install-plugin' }, async ({ payload }) => {
+      const { plugin_id } = payload ?? {}
+      if (!plugin_id) { console.warn('[install-plugin] missing plugin_id'); return }
+      if (!claudeBin) { console.warn('[install-plugin] claude binary not found — cannot install'); return }
+      console.log(`[install-plugin] installing ${plugin_id}...`)
+      await new Promise((resolve) => {
+        const proc = spawn(claudeBin, ['plugin', 'install', plugin_id], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env },
+        })
+        proc.stdout.on('data', d => process.stdout.write(`[install-plugin] ${d}`))
+        proc.stderr.on('data', d => process.stderr.write(`[install-plugin] ${d}`))
+        proc.on('close', (code) => {
+          if (code !== 0) console.error(`[install-plugin] failed for ${plugin_id} (exit ${code})`)
+          else console.log(`[install-plugin] installed ${plugin_id}`)
+          resolve()
+        })
+        proc.on('error', (err) => {
+          console.error(`[install-plugin] spawn error: ${err.message}`)
+          resolve()
+        })
+      })
+    })
     .on('broadcast', { event: 'restart' }, () => {
       console.log('[restart] restart requested from dashboard — exiting')
       process.exit(0)

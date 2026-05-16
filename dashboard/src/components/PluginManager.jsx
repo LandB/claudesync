@@ -73,37 +73,50 @@ export default function PluginManager() {
     if (!deviceId) return
     setStatus(s => ({ ...s, [plugin.name]: 'installing' }))
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const content = [
-        `# ${plugin.name}`,
-        `# Version: ${plugin.version}`,
-        `# Source: ${plugin.source}`,
-        plugin.homepage_url ? `# Homepage: ${plugin.homepage_url}` : null,
-        plugin.npm_package   ? `# Install: npm install -g ${plugin.npm_package}` : null,
-        plugin.description   ? `\n${plugin.description}` : null,
-      ].filter(Boolean).join('\n')
+      const isNpmPlugin = plugin.source === 'npm' && plugin.npm_package
 
-      const isPlugin = plugin.source === 'npm' && plugin.npm_package
-      const filePath = isPlugin ? `plugins/${plugin.name}.json` : `skills/${plugin.name}.md`
-      const storagePath = `${user.id}/${filePath}`
-      const bytes = new TextEncoder().encode(content)
-      const hashBuf = await crypto.subtle.digest('SHA-256', bytes)
-      const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('')
+      if (isNpmPlugin) {
+        await new Promise((resolve) => {
+          const ch = supabase.channel(`device:${deviceId}`)
+          ch.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              ch.send({ type: 'broadcast', event: 'install-plugin', payload: { plugin_id: plugin.name } })
+                .finally(() => { supabase.removeChannel(ch); resolve() })
+            }
+          })
+        })
+      } else {
+        const { data: { user } } = await supabase.auth.getUser()
+        const content = [
+          `# ${plugin.name}`,
+          `# Version: ${plugin.version}`,
+          `# Source: ${plugin.source}`,
+          plugin.homepage_url ? `# Homepage: ${plugin.homepage_url}` : null,
+          plugin.description  ? `\n${plugin.description}` : null,
+        ].filter(Boolean).join('\n')
 
-      await supabase.storage.from('claude-env').upload(storagePath, bytes, { upsert: true, contentType: 'text/plain' })
-      await supabase.from('sync_files').upsert({
-        user_id: user.id, path: filePath, hash, storage_path: storagePath,
-        size_bytes: bytes.length, updated_by: deviceId, updated_at: new Date().toISOString(), deleted: false,
-      }, { onConflict: 'user_id,path' })
+        const filePath = `skills/${plugin.name}.md`
+        const storagePath = `${user.id}/${filePath}`
+        const bytes = new TextEncoder().encode(content)
+        const hashBuf = await crypto.subtle.digest('SHA-256', bytes)
+        const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('')
 
-      const { data: otherDevices } = await supabase.from('devices').select('id').neq('id', deviceId)
-      if (otherDevices?.length) {
-        await supabase.from('change_queue').insert(
-          otherDevices.map(d => ({ user_id: user.id, target_device: d.id, file_path: filePath, operation: 'upsert', storage_path: storagePath, hash }))
-        )
+        await supabase.storage.from('claude-env').upload(storagePath, bytes, { upsert: true, contentType: 'text/plain' })
+        await supabase.from('sync_files').upsert({
+          user_id: user.id, path: filePath, hash, storage_path: storagePath,
+          size_bytes: bytes.length, updated_by: deviceId, updated_at: new Date().toISOString(), deleted: false,
+        }, { onConflict: 'user_id,path' })
+
+        const { data: otherDevices } = await supabase.from('devices').select('id').neq('id', deviceId)
+        if (otherDevices?.length) {
+          await supabase.from('change_queue').insert(
+            otherDevices.map(d => ({ user_id: user.id, target_device: d.id, file_path: filePath, operation: 'upsert', storage_path: storagePath, hash }))
+          )
+        }
+        await loadInstalled()
       }
+
       setStatus(s => ({ ...s, [plugin.name]: 'done' }))
-      await loadInstalled()
     } catch (e) {
       setStatus(s => ({ ...s, [plugin.name]: 'error:' + e.message }))
     }
