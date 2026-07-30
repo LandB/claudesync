@@ -314,11 +314,20 @@ export default function Devices() {
     const device = devices.find(d => d.id === id)
     await supabase.from('devices').delete().eq('id', id)
     if (device) {
-      await supabase.from('device_blocklist').upsert({
+      const row = {
         user_id: device.user_id,
+        device_uuid: device.device_uuid ?? null,
         mac_address: device.mac_address ?? null,
         hostname: device.hostname,
-      }, { onConflict: 'user_id,hostname', ignoreDuplicates: true })
+      }
+      // Block the exact machine when it has a stable id. Devices still on an old
+      // agent have none, so they fall back to a plain insert keyed on nothing —
+      // hostname is no longer unique here, since two machines can report the same one.
+      if (device.device_uuid) {
+        await supabase.from('device_blocklist').upsert(row, { onConflict: 'user_id,device_uuid' })
+      } else {
+        await supabase.from('device_blocklist').insert(row)
+      }
     }
     setDevices(d => d.filter(x => x.id !== id))
   }

@@ -14,11 +14,11 @@ export class ApiClient {
     }
   }
 
-  async heartbeat({ hostname, platform, claudePath, name, agentVersion = '1.0.0', macAddress }) {
+  async heartbeat({ hostname, platform, claudePath, name, agentVersion = '1.0.0', macAddress, deviceUuid }) {
     const res = await fetch(`${this.base}/heartbeat`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({ hostname, platform, claude_path: claudePath, name, agent_version: agentVersion, mac_address: macAddress }),
+      body: JSON.stringify({ hostname, platform, claude_path: claudePath, name, agent_version: agentVersion, mac_address: macAddress, device_uuid: deviceUuid }),
     })
     if (!res.ok) throw new Error(`heartbeat failed: ${res.status}`)
     return res.json()

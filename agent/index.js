@@ -7,6 +7,7 @@ import { execSync, spawn } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
 import { loadConfig } from './lib/config.js'
 import { ApiClient, sha256 } from './lib/api.js'
+import { getDeviceUuid } from './lib/device-id.js'
 import { isAllowed, CHOKIDAR_IGNORE } from './lib/watcher.js'
 import { sanitizePluginPaths, sanitizeHomePath, expandPluginPaths, expandHomePath } from './lib/sanitize-plugin-paths.js'
 
@@ -145,6 +146,8 @@ async function main() {
 
   const api = new ApiClient({ supabaseUrl, agentToken })
 
+  const deviceUuid = getDeviceUuid()
+
   console.log('[startup] registering device...')
   const { device_id: deviceId } = await api.heartbeat({
     hostname: hostname(),
@@ -152,6 +155,7 @@ async function main() {
     claudePath,
     name: config.name ?? hostname(),
     macAddress: getMacAddress(),
+    deviceUuid,
   })
   console.log(`[startup] device_id: ${deviceId}`)
 
@@ -299,6 +303,7 @@ async function main() {
         claudePath,
         name: config.name ?? hostname(),
         macAddress: getMacAddress(),
+        deviceUuid,
       })
     } catch (err) { console.error('[heartbeat error]', err.message) }
   }, HEARTBEAT_INTERVAL_MS)
