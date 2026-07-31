@@ -158,6 +158,8 @@ Each device card has three actions:
 - **Send files to this machine** — pushes all server files down to the device and installs missing plugins.
 - **Restart agent** — sends a restart signal; launchd/systemd restarts the process automatically.
 
+Removing a device also blocks that machine from re-registering, so a stale install cannot silently reappear. Reinstalling on it stays blocked until you clear the entry under **Blocked devices** at the bottom of the Devices page.
+
 ## Path portability
 
 Paths containing your home directory or claude path are tokenized on push (`{{USER_HOME}}`, `{{CLAUDE_PATH}}`) and expanded back on pull. Files sync cleanly between machines with different usernames or install locations.
@@ -170,6 +172,23 @@ Paths containing your home directory or claude path are tokenized on push (`{{US
 | Linux | systemd user service (`~/.config/systemd/user/claudesync.service`) |
 | Windows | Task Scheduler + VBScript launcher (hidden window, restarts on failure) |
 | No systemd | Shell rc file (`~/.bashrc` / `~/.zshrc`) + nohup |
+
+### When the agent is not running
+
+The agent leaves three traces so a background crash is visible:
+
+| Where | What |
+| --- | --- |
+| `~/.claudesync/agent.log` | stdout and stderr of every run |
+| `~/.claudesync/agent-status.json` | `running` (with pid and device id) or `stopped` with the error, HTTP status and a hint |
+| Desktop notification | fired once when the agent stops |
+
+Failures the server will keep rejecting — a blocked device (403) or a bad token (401) — exit cleanly on purpose, so launchd/systemd stop instead of crash-looping on the same response. Fix the cause (unblock the device in the dashboard, or re-run the install script), then start the agent again:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.claudesync.agent   # macOS
+systemctl --user restart claudesync.service               # Linux
+```
 
 ---
 

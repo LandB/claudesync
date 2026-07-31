@@ -41,6 +41,11 @@ const s = {
   renameInput: { background:'#111', border:'1px solid #444', borderRadius:'4px', color:'#fff', fontSize:'0.95rem', fontWeight:'600', padding:'1px 6px', outline:'none', width:'180px' },
   pencil:      { background:'none', border:'none', color:'#444', cursor:'pointer', padding:'2px', lineHeight:1, display:'inline-flex', alignItems:'center' },
   renameOk:    { background:'none', border:'none', color:'#4ade80', cursor:'pointer', padding:'2px', lineHeight:1, display:'inline-flex', alignItems:'center' },
+  blockedWrap: { marginTop:'1.5rem', borderTop:'1px solid #252525', paddingTop:'1rem' },
+  blockedHead: { fontSize:'0.9rem', fontWeight:'600', color:'#aaa', marginBottom:'0.35rem' },
+  blockedNote: { fontSize:'0.75rem', color:'#666', marginBottom:'0.75rem', lineHeight:'1.5' },
+  blockedRow:  { display:'flex', alignItems:'center', gap:'1rem', background:'#161616', border:'1px solid #252525', borderRadius:'8px', padding:'0.6rem 0.9rem', marginBottom:'0.5rem' },
+  btnUnblock:  { marginLeft:'auto', background:'#0f2d1a', border:'1px solid #166534', color:'#4ade80', cursor:'pointer', fontSize:'0.75rem', padding:'3px 10px', borderRadius:'4px' },
 }
 
 function ago(ts) {
@@ -245,6 +250,7 @@ export default function Devices() {
   const [pendingCounts, setPendingCounts] = useState({})
   const [renamingId, setRenamingId] = useState(null)
   const [renameVal, setRenameVal] = useState('')
+  const [blocked, setBlocked] = useState([])
 
   async function load(initial = false) {
     if (initial) setLoading(true)
@@ -253,7 +259,24 @@ export default function Devices() {
       .select('*')
       .order('created_at', { ascending: true })
     setDevices(data ?? [])
+    await loadBlocked()
     if (initial) setLoading(false)
+  }
+
+  async function loadBlocked() {
+    const { data } = await supabase
+      .from('device_blocklist')
+      .select('*')
+      .order('blocked_at', { ascending: true })
+    setBlocked(data ?? [])
+  }
+
+  // Removing a device blocks the machine from re-registering, so without this the
+  // only way back onto an account is editing the table by hand — the agent just
+  // crash-loops on a 403.
+  async function unblock(id) {
+    await supabase.from('device_blocklist').delete().eq('id', id)
+    setBlocked(b => b.filter(x => x.id !== id))
   }
 
   async function loadPendingCounts(deviceList) {
@@ -330,6 +353,7 @@ export default function Devices() {
       }
     }
     setDevices(d => d.filter(x => x.id !== id))
+    await loadBlocked()
   }
 
   useEffect(() => {
@@ -436,6 +460,28 @@ export default function Devices() {
           </div>
         )
       })}
+      {!loading && blocked.length > 0 && (
+        <div style={s.blockedWrap}>
+          <div style={s.blockedHead}>Blocked devices ({blocked.length})</div>
+          <div style={s.blockedNote}>
+            Removed machines are blocked from re-registering. An agent installed on one stops with
+            “Device is blocked”. Unblock it here, then start the agent again.
+          </div>
+          {blocked.map(b => (
+            <div key={b.id} style={s.blockedRow}>
+              <div>
+                <div style={{ ...s.name, fontSize:'0.85rem' }}>{b.hostname}</div>
+                <div style={s.meta}>
+                  {b.mac_address ?? 'no MAC'} · blocked {ago(b.blocked_at)}
+                </div>
+              </div>
+              <button style={s.btnUnblock} onClick={() => unblock(b.id)} title="Allow this machine to register again">
+                <span style={{ display:'inline-flex', alignItems:'center', gap:'4px' }}><LuCheck size={11} />Unblock</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

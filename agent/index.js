@@ -10,8 +10,42 @@ import { ApiClient, sha256 } from './lib/api.js'
 import { getDeviceUuid } from './lib/device-id.js'
 import { isAllowed, CHOKIDAR_IGNORE } from './lib/watcher.js'
 import { sanitizePluginPaths, sanitizeHomePath, expandPluginPaths, expandHomePath } from './lib/sanitize-plugin-paths.js'
+import { isPermanent, hintFor, notify, writeStatus, STATUS_PATH } from './lib/health.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
+
+// Restarts requested from the dashboard exit non-zero on purpose: the supervisor
+// is configured to restart on failure only, so a clean exit would take the agent
+// down for good instead of bouncing it.
+const EXIT_RESTART = 75
+
+/**
+ * Single exit path for anything that stops the agent. Leaves three traces the
+ * user can actually find: the log line, the status file, and a desktop
+ * notification — a crashed background agent is otherwise indistinguishable from
+ * a running one.
+ */
+function fatal(err) {
+  const permanent = isPermanent(err)
+  const hint = hintFor(err)
+  const message = err?.message ?? String(err)
+
+  console.error('[fatal]', err)
+  if (hint) console.error('[fatal]', hint)
+
+  writeStatus({
+    state: 'stopped',
+    error: message,
+    http_status: err?.status ?? null,
+    permanent,
+    hint,
+  })
+  notify('ClaudeSync agent stopped', hint ?? message)
+
+  // Exiting 0 on a permanent failure is what stops launchd/systemd from
+  // restarting straight back into the same rejection.
+  process.exit(permanent ? 0 : 1)
+}
 
 function getMacAddress() {
   const nets = networkInterfaces()
@@ -158,6 +192,7 @@ async function main() {
     deviceUuid,
   })
   console.log(`[startup] device_id: ${deviceId}`)
+  writeStatus({ state: 'running', device_id: deviceId, hostname: hostname(), pid: process.pid })
 
   const supabase = createClient(supabaseUrl, config.supabaseAnonKey ?? 'anon-placeholder', {
     realtime: { params: { eventsPerSecond: 10 } },
@@ -288,7 +323,7 @@ async function main() {
     })
     .on('broadcast', { event: 'restart' }, () => {
       console.log('[restart] restart requested from dashboard — exiting')
-      process.exit(0)
+      process.exit(EXIT_RESTART)
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') console.log('[realtime] connected')
@@ -305,13 +340,16 @@ async function main() {
         macAddress: getMacAddress(),
         deviceUuid,
       })
-    } catch (err) { console.error('[heartbeat error]', err.message) }
+    } catch (err) {
+      // A device blocked while the agent was already up keeps heartbeating into
+      // a 403 forever, staying "online" locally and dead everywhere else.
+      if (isPermanent(err)) fatal(err)
+      console.error('[heartbeat error]', err.message)
+    }
   }, HEARTBEAT_INTERVAL_MS)
 
   console.log('[ready] ClaudeSync agent running (manual sync mode)')
+  console.log(`[ready] status file: ${STATUS_PATH}`)
 }
 
-main().catch(err => {
-  console.error('[fatal]', err)
-  process.exit(1)
-})
+main().catch(fatal)

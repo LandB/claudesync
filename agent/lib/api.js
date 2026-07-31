@@ -20,7 +20,15 @@ export class ApiClient {
       headers: this.headers,
       body: JSON.stringify({ hostname, platform, claude_path: claudePath, name, agent_version: agentVersion, mac_address: macAddress, device_uuid: deviceUuid }),
     })
-    if (!res.ok) throw new Error(`heartbeat failed: ${res.status}`)
+    // The status alone cannot tell a blocked device from a bad token, and both
+    // are things the user has to act on — carry the body and the code through so
+    // the fatal handler can explain which one happened.
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      const err = new Error(`heartbeat failed: ${res.status}${detail ? ` ${detail}` : ''}`)
+      err.status = res.status
+      throw err
+    }
     return res.json()
   }
 
