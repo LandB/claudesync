@@ -5,26 +5,6 @@ import { validateToken, unauthorizedResponse, errorResponse, okResponse } from '
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-async function broadcastToDevice(deviceId: string, payload: unknown) {
-  // Supabase Realtime REST broadcast API
-  await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SERVICE_ROLE}`,
-      'apikey': SERVICE_ROLE,
-    },
-    body: JSON.stringify({
-      messages: [{
-        topic: `realtime:device:${deviceId}`,
-        event: 'change',
-        payload,
-        private: false,
-      }]
-    }),
-  }).catch(() => { /* best-effort — agent polls as fallback */ })
-}
-
 serve(async (req) => {
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405)
 
@@ -87,28 +67,9 @@ serve(async (req) => {
       .eq('path', file_path)
   }
 
-  // Enqueue for other devices + broadcast
-  const { data: otherDevices } = await supabase
-    .from('devices')
-    .select('id')
-    .eq('user_id', userId)
-    .neq('id', device_id)
-
-  if (otherDevices && otherDevices.length > 0) {
-    await supabase.from('change_queue').insert(
-      otherDevices.map(d => ({
-        user_id: userId,
-        target_device: d.id,
-        file_path,
-        operation,
-        storage_path: operation === 'upsert' ? storagePath : null,
-        hash: operation === 'upsert' ? hash : null,
-      }))
-    )
-    await Promise.all(otherDevices.map(d =>
-      broadcastToDevice(d.id, { file_path, operation })
-    ))
-  }
-
+  // No fanout here on purpose. ClaudeSync is manual-sync: change_queue was
+  // dropped in 20260508000002_manual_sync.sql, and the agent has no handler for
+  // a push notification. Other devices receive this file when the user runs
+  // "Send files to this machine" (snapshot) or a targeted pull-files.
   return okResponse({ ok: true })
 })

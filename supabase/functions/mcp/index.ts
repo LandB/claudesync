@@ -31,7 +31,7 @@ async function resolveUser(req: Request, supabase: SupabaseClient): Promise<stri
 const TOOLS = [
   {
     name: 'sync_push',
-    description: 'Push a local file to ClaudeSync storage so other devices receive it.',
+    description: 'Push a local file to ClaudeSync storage. Other devices pick it up on their next pull — ClaudeSync does not push to devices automatically.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,15 +41,6 @@ const TOOLS = [
         operation: { type: 'string', enum: ['upsert', 'delete'] },
       },
       required: ['device_id', 'file_path', 'operation'],
-    },
-  },
-  {
-    name: 'sync_pull',
-    description: 'Pull pending file changes queued for this device.',
-    inputSchema: {
-      type: 'object',
-      properties: { device_id: { type: 'string' } },
-      required: ['device_id'],
     },
   },
   {
@@ -106,7 +97,7 @@ const TOOLS = [
   },
   {
     name: 'delete_file',
-    description: 'Delete a single synced file from ClaudeSync storage and queue removal on all devices.',
+    description: 'Delete a single synced file from ClaudeSync storage. Files already on devices are not touched.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -117,7 +108,7 @@ const TOOLS = [
   },
   {
     name: 'delete_all_files',
-    description: 'Delete ALL synced files for this user — useful for a fresh sync. Queues delete on all devices.',
+    description: 'Delete ALL synced files for this user — useful for a fresh sync. Files already on devices are not touched.',
     inputSchema: { type: 'object', properties: {} },
   },
 ]
@@ -161,17 +152,7 @@ async function handleSyncPush(userId: string, args: Record<string,string>, supab
       updated_at: new Date().toISOString(), deleted: false,
     }, { onConflict: 'user_id,path' })
 
-    const { data: others } = await supabase.from('devices').select('id')
-      .eq('user_id', userId).neq('id', device_id)
-    if (others?.length) {
-      await supabase.from('change_queue').insert(
-        others.map((d: {id: string}) => ({
-          user_id: userId, target_device: d.id, file_path,
-          operation, storage_path: storagePath, hash,
-        }))
-      )
-    }
-    return toolOk(`Pushed ${file_path} (${bytes.length}B, hash:${hash.slice(0,12)}…) — queued for ${others?.length ?? 0} device(s)`)
+    return toolOk(`Pushed ${file_path} (${bytes.length}B, hash:${hash.slice(0,12)}…) — on the server now; other devices receive it on their next pull.`)
   } else {
     await supabase.storage.from('claude-env').remove([storagePath])
     await supabase.from('sync_files')
@@ -179,22 +160,6 @@ async function handleSyncPush(userId: string, args: Record<string,string>, supab
       .eq('user_id', userId).eq('path', file_path)
     return toolOk(`Deleted ${file_path} from ClaudeSync`)
   }
-}
-
-async function handleSyncPull(userId: string, args: Record<string,string>, supabase: SupabaseClient) {
-  const { device_id } = args
-  if (!device_id) return toolErr('device_id required')
-  const { data: items, error } = await supabase.from('change_queue')
-    .select('id, file_path, operation, hash')
-    .eq('user_id', userId).eq('target_device', device_id).eq('delivered', false)
-    .order('created_at', { ascending: true }).limit(50)
-  if (error) return toolErr(error.message)
-  if (!items?.length) return toolOk('No pending changes.')
-  await supabase.from('change_queue')
-    .update({ delivered: true, delivered_at: new Date().toISOString() })
-    .in('id', items.map((i: {id: string}) => i.id))
-  const lines = items.map((i: {operation: string; file_path: string}) => `${i.operation.padEnd(6)} ${i.file_path}`)
-  return toolOk(`${items.length} change(s) marked delivered:\n${lines.join('\n')}`)
 }
 
 async function handleDeviceStatus(userId: string, _args: unknown, supabase: SupabaseClient) {
@@ -247,13 +212,7 @@ async function handleInstall(kind: 'skill'|'plugin', userId: string, args: Recor
     user_id: userId, path: filePath, hash, storage_path: storagePath,
     size_bytes: bytes.length, updated_by: device_id, updated_at: new Date().toISOString(), deleted: false,
   }, { onConflict: 'user_id,path' })
-  const { data: others } = await supabase.from('devices').select('id').eq('user_id', userId).neq('id', device_id)
-  if (others?.length) {
-    await supabase.from('change_queue').insert(
-      others.map((d: {id: string}) => ({ user_id: userId, target_device: d.id, file_path: filePath, operation: 'upsert', storage_path: storagePath, hash }))
-    )
-  }
-  return toolOk(`Installed ${kind} "${name}" → ${filePath}. Syncing to ${others?.length ?? 0} device(s).`)
+  return toolOk(`Installed ${kind} "${name}" → ${filePath}. On the server now; devices receive it on their next pull.`)
 }
 
 async function handleDiff(userId: string, args: Record<string,string>, supabase: SupabaseClient) {
@@ -307,7 +266,6 @@ async function handleDeleteAllFiles(userId: string, _args: unknown, supabase: Su
 async function dispatchTool(userId: string, name: string, args: Record<string,string>, supabase: SupabaseClient) {
   switch (name) {
     case 'sync_push':        return handleSyncPush(userId, args, supabase)
-    case 'sync_pull':        return handleSyncPull(userId, args, supabase)
     case 'device_status':    return handleDeviceStatus(userId, args, supabase)
     case 'list_skills':      return handleListSkills(userId, args, supabase)
     case 'install_skill':    return handleInstall('skill', userId, args, supabase)

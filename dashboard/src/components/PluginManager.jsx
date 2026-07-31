@@ -107,12 +107,17 @@ export default function PluginManager() {
           size_bytes: bytes.length, updated_by: deviceId, updated_at: new Date().toISOString(), deleted: false,
         }, { onConflict: 'user_id,path' })
 
+        // change_queue was dropped with manual sync — tell the devices directly.
         const { data: otherDevices } = await supabase.from('devices').select('id').neq('id', deviceId)
-        if (otherDevices?.length) {
-          await supabase.from('change_queue').insert(
-            otherDevices.map(d => ({ user_id: user.id, target_device: d.id, file_path: filePath, operation: 'upsert', storage_path: storagePath, hash }))
-          )
-        }
+        await Promise.all((otherDevices ?? []).map(d => new Promise(resolve => {
+          const ch = supabase.channel(`device:${d.id}`)
+          ch.subscribe(status => {
+            if (status === 'SUBSCRIBED') {
+              ch.send({ type: 'broadcast', event: 'pull-files', payload: { files: [filePath] } })
+                .finally(() => { supabase.removeChannel(ch); resolve() })
+            }
+          })
+        })))
         await loadInstalled()
       }
 
