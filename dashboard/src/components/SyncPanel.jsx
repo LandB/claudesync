@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LuChevronDown, LuChevronRight, LuX, LuInfo } from 'react-icons/lu'
 import { supabase } from '../supabase'
+import { takeVersionFrom } from '../deviceCommands'
 
 const s = {
   wrap:      { padding:'1.5rem 0' },
@@ -121,20 +122,6 @@ function renderTree(node, depth, expanded, toggle) {
   return rows
 }
 
-
-export async function takeVersionFrom(deviceId, filePath) {
-  // The agent's `sync` handler reads the file off that machine and pushes it,
-  // so this makes the chosen device's copy the server copy.
-  await new Promise((resolve) => {
-    const ch = supabase.channel(`device:${deviceId}`)
-    ch.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        ch.send({ type: 'broadcast', event: 'sync', payload: { files: [filePath] } })
-          .finally(() => { supabase.removeChannel(ch); resolve() })
-      }
-    })
-  })
-}
 
 function ConflictModal({ pending, onClose }) {
   const [conflicts, setConflicts] = useState(null)

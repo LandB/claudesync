@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LuRefreshCw } from 'react-icons/lu'
 import { supabase } from '../supabase'
-import { takeVersionFrom } from './SyncPanel'
+import { takeVersionFrom } from '../deviceCommands'
 
 const s = {
   wrap:    { padding:'1.5rem 0' },
