@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LuRefreshCw } from 'react-icons/lu'
 import { supabase } from '../supabase'
+import { takeVersionFrom } from './SyncPanel'
 
 const s = {
   wrap:    { padding:'1.5rem 0' },
@@ -17,8 +18,11 @@ const s = {
   label:   { fontSize:'0.7rem', color:'#555', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'3px' },
   val:     { fontSize:'0.8rem', color:'#aaa', fontFamily:'monospace', wordBreak:'break-all' },
   time:    { fontSize:'0.75rem', color:'#444', marginTop:'0.5rem' },
-  foot:    { display:'flex', gap:'0.5rem', marginTop:'0.75rem' },
+  foot:    { display:'flex', gap:'0.5rem', marginTop:'0.75rem', flexWrap:'wrap', alignItems:'center' },
   btn:     { padding:'5px 14px', borderRadius:'6px', fontSize:'0.8rem', cursor:'pointer', background:'none', border:'1px solid #333', color:'#aaa' },
+  takeBtn: { padding:'5px 14px', borderRadius:'6px', fontSize:'0.8rem', cursor:'pointer', background:'#1e1b34', border:'1px solid #4c3f8a', color:'#c4b5fd' },
+  explain: { fontSize:'0.83rem', color:'#888', lineHeight:'1.6', background:'#141414', border:'1px solid #252525', borderRadius:'6px', padding:'0.75rem', marginBottom:'1rem' },
+  note:    { fontSize:'0.72rem', color:'#555', marginTop:'0.4rem', lineHeight:'1.5' },
   badge:   (ok) => ({ fontSize:'0.7rem', padding:'2px 7px', borderRadius:'4px', display:'inline-block', background: ok ? '#14532d' : '#450a0a', color: ok ? '#4ade80' : '#f87171', marginLeft:'0.5rem' }),
 }
 
@@ -36,6 +40,7 @@ export default function ConflictLog() {
   const [devices, setDevices]     = useState({})
   const [loading, setLoading]     = useState(true)
   const [showResolved, setShowResolved] = useState(false)
+  const [busy, setBusy]           = useState(null)
 
   async function load() {
     setLoading(true)
@@ -50,16 +55,24 @@ export default function ConflictLog() {
     setLoading(false)
   }
 
-  async function resolve(id) {
+  async function dismiss(id) {
     await supabase.from('conflict_log').update({ resolved: true }).eq('id', id)
     setConflicts(cs => cs.map(c => c.id === id ? { ...c, resolved: true } : c))
   }
 
-  async function resolveAll() {
+  async function dismissAll() {
     const ids = conflicts.filter(c => !c.resolved).map(c => c.id)
     if (!ids.length) return
     await supabase.from('conflict_log').update({ resolved: true }).in('id', ids)
     setConflicts(cs => cs.map(c => ({ ...c, resolved: true })))
+  }
+
+  async function take(conflict, deviceId) {
+    setBusy(conflict.id)
+    await takeVersionFrom(deviceId, conflict.file_path)
+    await supabase.from('conflict_log').update({ resolved: true }).eq('id', conflict.id)
+    setConflicts(cs => cs.map(c => c.id === conflict.id ? { ...c, resolved: true } : c))
+    setBusy(null)
   }
 
   useEffect(() => { load() }, [])
@@ -76,12 +89,18 @@ export default function ConflictLog() {
           {unresolved === 0 && conflicts.length > 0 && <span style={s.badge(true)}>all clear</span>}
         </h2>
         <div style={{ display:'flex', gap:'0.5rem' }}>
-          {unresolved > 0 && <button style={s.btn} onClick={resolveAll}>Resolve all</button>}
+          {unresolved > 0 && <button style={s.btn} onClick={dismissAll}>Dismiss all</button>}
           <button style={s.btn} onClick={() => setShowResolved(v => !v)}>
             {showResolved ? 'Hide resolved' : 'Show resolved'}
           </button>
           <button style={s.btn} onClick={load}><LuRefreshCw size={14} /></button>
         </div>
+      </div>
+
+      <div style={s.explain}>
+        A conflict is a record of an overwrite, not something blocking a sync. ClaudeSync is last-write-wins — the device that pushed most recently is already the server copy.
+        <br /><br />
+        <strong style={{ color:'#ccc' }}>Dismiss</strong> clears the record. <strong style={{ color:'#ccc' }}>Take version from …</strong> pushes that machine's current copy to the server, overwriting what is there.
       </div>
 
       {loading && <div style={s.empty}>Loading…</div>}
@@ -101,21 +120,33 @@ export default function ConflictLog() {
           </div>
           <div style={s.row}>
             <div style={s.col}>
-              <div style={s.label}>Winner (kept)</div>
+              <div style={s.label}>On server now</div>
               <div style={s.val}>{devices[c.winning_device] ?? c.winning_device?.slice(0,8)}</div>
               <div style={{ ...s.val, color:'#666' }}>hash: {truncate(c.winning_hash)}</div>
             </div>
             <div style={s.col}>
-              <div style={s.label}>Loser (discarded)</div>
+              <div style={s.label}>Overwritten</div>
               <div style={s.val}>{devices[c.losing_device] ?? c.losing_device?.slice(0,8)}</div>
               <div style={{ ...s.val, color:'#666' }}>hash: {truncate(c.losing_hash)}</div>
             </div>
           </div>
           <div style={s.time}>{ago(c.created_at)}</div>
           {!c.resolved && (
-            <div style={s.foot}>
-              <button style={s.btn} onClick={() => resolve(c.id)}>Mark resolved</button>
-            </div>
+            <>
+              <div style={s.foot}>
+                <button style={s.btn} onClick={() => dismiss(c.id)} disabled={busy === c.id}>Dismiss</button>
+                {[c.losing_device, c.winning_device]
+                  .filter((id, i, arr) => id && devices[id] && arr.indexOf(id) === i)
+                  .map(id => (
+                    <button key={id} style={s.takeBtn} onClick={() => take(c, id)} disabled={busy === c.id}>
+                      {busy === c.id ? 'Pushing…' : `Take version from ${devices[id]}`}
+                    </button>
+                  ))}
+              </div>
+              <div style={s.note}>
+                Reads the file as it is on that machine right now and pushes it to the server. The device must be online.
+              </div>
+            </>
           )}
         </div>
       ))}

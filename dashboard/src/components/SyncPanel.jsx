@@ -39,6 +39,9 @@ const s = {
   clabel:    { fontSize:'0.68rem', color:'#555', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'2px' },
   cval:      { fontSize:'0.78rem', color:'#aaa', fontFamily:'monospace' },
   resolveBtn:(disabled) => ({ marginTop:'0.5rem', padding:'4px 12px', borderRadius:'6px', fontSize:'0.78rem', cursor: disabled ? 'not-allowed' : 'pointer', background:'none', border:'1px solid #333', color: disabled ? '#444' : '#aaa', opacity: disabled ? 0.5 : 1 }),
+  takeBtn:   (busy) => ({ padding:'4px 12px', borderRadius:'6px', fontSize:'0.78rem', cursor: busy ? 'wait' : 'pointer', background:'#1e1b34', border:'1px solid #4c3f8a', color:'#c4b5fd' }),
+  cfoot:     { display:'flex', gap:'0.4rem', marginTop:'0.5rem', flexWrap:'wrap', alignItems:'center' },
+  cnote:     { fontSize:'0.72rem', color:'#555', marginTop:'0.35rem', lineHeight:'1.5' },
 }
 
 function ago(ts) {
@@ -119,9 +122,24 @@ function renderTree(node, depth, expanded, toggle) {
 }
 
 
+export async function takeVersionFrom(deviceId, filePath) {
+  // The agent's `sync` handler reads the file off that machine and pushes it,
+  // so this makes the chosen device's copy the server copy.
+  await new Promise((resolve) => {
+    const ch = supabase.channel(`device:${deviceId}`)
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        ch.send({ type: 'broadcast', event: 'sync', payload: { files: [filePath] } })
+          .finally(() => { supabase.removeChannel(ch); resolve() })
+      }
+    })
+  })
+}
+
 function ConflictModal({ pending, onClose }) {
   const [conflicts, setConflicts] = useState(null)
   const [devices, setDevices] = useState({})
+  const [busy, setBusy] = useState(null)
 
   async function load() {
     const [cfRes, devRes] = await Promise.all([
@@ -136,17 +154,24 @@ function ConflictModal({ pending, onClose }) {
 
   useEffect(() => { load() }, [])
 
-  async function resolve(id) {
-    if (pending > 0) return
+  async function dismiss(id) {
     await supabase.from('conflict_log').update({ resolved: true }).eq('id', id)
     setConflicts(cs => cs.filter(c => c.id !== id))
   }
 
-  async function resolveAll() {
-    if (pending > 0 || !conflicts?.length) return
+  async function dismissAll() {
+    if (!conflicts?.length) return
     const ids = conflicts.map(c => c.id)
     await supabase.from('conflict_log').update({ resolved: true }).in('id', ids)
     setConflicts([])
+  }
+
+  async function take(conflict, deviceId) {
+    setBusy(conflict.id)
+    await takeVersionFrom(deviceId, conflict.file_path)
+    await supabase.from('conflict_log').update({ resolved: true }).eq('id', conflict.id)
+    setConflicts(cs => cs.filter(c => c.id !== conflict.id))
+    setBusy(null)
   }
 
   function truncate(str, n = 12) { return str ? str.slice(0, n) + '…' : '—' }
@@ -158,19 +183,21 @@ function ConflictModal({ pending, onClose }) {
           <span style={s.mtitle}>Unresolved conflicts</span>
           <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
             {conflicts?.length > 0 &&
-              <button style={s.resolveBtn(pending > 0)} onClick={resolveAll} disabled={pending > 0}>
-                Resolve all
+              <button style={s.resolveBtn(false)} onClick={dismissAll}>
+                Dismiss all
               </button>
             }
             <button style={s.mclose} onClick={onClose}><LuX size={15} /></button>
           </div>
         </div>
         <div style={s.mexplain}>
-          A <strong style={{ color:'#ccc' }}>conflict</strong> happens when the same file is modified on two devices before either syncs. ClaudeSync keeps the most recent version (winner) and discards the other (loser). Mark a conflict resolved once you've verified the right version won.
+          A <strong style={{ color:'#ccc' }}>conflict</strong> is a record, not a block. When two devices change the same file, ClaudeSync is last-write-wins: whichever device pushed most recently is already the server copy. Nothing is waiting on you.
+          <br /><br />
+          <strong style={{ color:'#ccc' }}>Dismiss</strong> clears the record. <strong style={{ color:'#ccc' }}>Take version from …</strong> pushes that machine's current copy of the file to the server, overwriting what is there — use it when the wrong device won.
         </div>
         {pending > 0 &&
           <div style={s.warn}>
-            {pending} pending change{pending > 1 ? 's' : ''} still in queue — wait for them to deliver before resolving conflicts to avoid re-triggering them.
+            {pending} file{pending > 1 ? 's' : ''} still pending on a device — pushing a version now may be overwritten when that sync runs.
           </div>
         }
         <div style={s.mscroll}>
@@ -181,20 +208,32 @@ function ConflictModal({ pending, onClose }) {
               <div style={s.cpath}>{c.file_path}</div>
               <div style={s.crow}>
                 <div style={s.ccol}>
-                  <div style={s.clabel}>Winner (kept)</div>
+                  <div style={s.clabel}>On server now</div>
                   <div style={s.cval}>{devices[c.winning_device] ?? truncate(c.winning_device)}</div>
                   <div style={{ ...s.cval, color:'#555' }}>hash: {truncate(c.winning_hash)}</div>
                 </div>
                 <div style={s.ccol}>
-                  <div style={s.clabel}>Loser (discarded)</div>
+                  <div style={s.clabel}>Overwritten</div>
                   <div style={s.cval}>{devices[c.losing_device] ?? truncate(c.losing_device)}</div>
                   <div style={{ ...s.cval, color:'#555' }}>hash: {truncate(c.losing_hash)}</div>
                 </div>
               </div>
               <div style={{ ...s.del, marginTop:'4px' }}>{ago(c.created_at)}</div>
-              <button style={s.resolveBtn(pending > 0)} onClick={() => resolve(c.id)} disabled={pending > 0}>
-                Mark resolved
-              </button>
+              <div style={s.cfoot}>
+                <button style={s.resolveBtn(busy === c.id)} onClick={() => dismiss(c.id)} disabled={busy === c.id}>
+                  Dismiss
+                </button>
+                {[c.losing_device, c.winning_device]
+                  .filter((id, i, arr) => id && devices[id] && arr.indexOf(id) === i)
+                  .map(id => (
+                    <button key={id} style={s.takeBtn(busy === c.id)} onClick={() => take(c, id)} disabled={busy === c.id}>
+                      {busy === c.id ? 'Pushing…' : `Take version from ${devices[id]}`}
+                    </button>
+                  ))}
+              </div>
+              <div style={s.cnote}>
+                Reads the file as it is on that machine right now and pushes it to the server. The device must be online.
+              </div>
             </div>
           ))}
         </div>
@@ -204,23 +243,25 @@ function ConflictModal({ pending, onClose }) {
 }
 
 export default function SyncPanel() {
-  const [stats, setStats]       = useState({ files: 0, devices: 0, conflicts: 0 })
+  const [stats, setStats]       = useState({ files: 0, devices: 0, conflicts: 0, pending: 0 })
   const [recent, setRecent]     = useState([])
   const [expanded, setExpanded] = useState(new Set())
   const [showConflicts, setShowConflicts] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [filesRes, devRes, cfRes, recentRes] = await Promise.all([
+      const [filesRes, devRes, cfRes, pendRes, recentRes] = await Promise.all([
         supabase.from('sync_files').select('id', { count:'exact' }).eq('deleted', false),
         supabase.from('devices').select('id', { count:'exact' }),
         supabase.from('conflict_log').select('id', { count:'exact' }).eq('resolved', false),
+        supabase.from('discovery_results').select('id', { count:'exact', head: true }),
         supabase.from('sync_files').select('path, updated_at, updated_by').eq('deleted', false).order('updated_at', { ascending: false }).limit(50),
       ])
       setStats({
         files:     filesRes.count ?? 0,
         devices:   devRes.count ?? 0,
         conflicts: cfRes.count ?? 0,
+        pending:   pendRes.count ?? 0,
       })
       setRecent(recentRes.data ?? [])
     }
@@ -259,7 +300,7 @@ export default function SyncPanel() {
         </div>
       </div>
 
-      {showConflicts && <ConflictModal pending={0} onClose={() => setShowConflicts(false)} />}
+      {showConflicts && <ConflictModal pending={stats.pending} onClose={() => setShowConflicts(false)} />}
 
       <h3 style={s.h3}>Recent activity</h3>
       {recent.length === 0
