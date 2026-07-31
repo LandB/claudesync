@@ -43,7 +43,12 @@ const s = {
   takeBtn:   (busy) => ({ padding:'4px 12px', borderRadius:'6px', fontSize:'0.78rem', cursor: busy ? 'wait' : 'pointer', background:'#1e1b34', border:'1px solid #4c3f8a', color:'#c4b5fd' }),
   cfoot:     { display:'flex', gap:'0.4rem', marginTop:'0.5rem', flexWrap:'wrap', alignItems:'center' },
   cnote:     { fontSize:'0.72rem', color:'#555', marginTop:'0.35rem', lineHeight:'1.5' },
+  truncated: { fontSize:'0.72rem', color:'#666', fontWeight:'400', marginLeft:'0.5rem' },
 }
+
+// Upper bound on the "Recent activity" tree. High enough that it shows every
+// file for any realistic ~/.claude, low enough to stay a bounded query.
+const RECENT_LIMIT = 500
 
 function ago(ts) {
   const sec = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
@@ -242,7 +247,10 @@ export default function SyncPanel() {
         supabase.from('devices').select('id', { count:'exact' }),
         supabase.from('conflict_log').select('id', { count:'exact' }).eq('resolved', false),
         supabase.from('discovery_results').select('id', { count:'exact', head: true }),
-        supabase.from('sync_files').select('path, updated_at, updated_by').eq('deleted', false).order('updated_at', { ascending: false }).limit(50),
+        // Bounded, but well clear of the file counts this syncs in practice — at
+        // 50 the tree silently showed half of what the "Synced files" tile
+        // claimed, with nothing to explain the gap.
+        supabase.from('sync_files').select('path, updated_at, updated_by').eq('deleted', false).order('updated_at', { ascending: false }).limit(RECENT_LIMIT),
       ])
       setStats({
         files:     filesRes.count ?? 0,
@@ -289,7 +297,12 @@ export default function SyncPanel() {
 
       {showConflicts && <ConflictModal pending={stats.pending} onClose={() => setShowConflicts(false)} />}
 
-      <h3 style={s.h3}>Recent activity</h3>
+      <h3 style={s.h3}>
+        Recent activity
+        {recent.length < stats.files &&
+          <span style={s.truncated}>showing {recent.length} of {stats.files}</span>
+        }
+      </h3>
       {recent.length === 0
         ? <div style={s.empty}>No files synced yet.</div>
         : <table style={s.table}>
