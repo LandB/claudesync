@@ -34,6 +34,9 @@ const s = {
   chevron:     { fontSize:'0.65rem', color:'#555', width:'10px', display:'inline-block' },
   dimPath:     { fontFamily:'monospace', color:'#888', fontSize:'0.8rem' },
   fileStatus:  (isNew) => ({ fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background: isNew ? '#12202d' : '#1c1209', color: isNew ? '#60a5fa' : '#fb923c' }),
+  failStatus:  { fontSize:'0.68rem', padding:'1px 5px', borderRadius:'4px', background:'#2d1212', color:'#f87171' },
+  failMsg:     { fontSize:'0.68rem', color:'#a15c5c', fontFamily:'monospace', paddingLeft:'22px', wordBreak:'break-all' },
+  failBanner:  { fontSize:'0.75rem', color:'#f87171', background:'#1c0e0e', border:'1px solid #7f1d1d', borderRadius:'6px', padding:'0.5rem 0.7rem', marginBottom:'0.5rem', lineHeight:'1.5' },
   checkbox:    { accentColor:'#a78bfa', cursor:'pointer', marginRight:'4px' },
   syncBar:     { display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:'0.5rem' },
   selectAll:   { fontSize:'0.75rem', color:'#666', cursor:'pointer', background:'none', border:'none', padding:0 },
@@ -119,6 +122,7 @@ function renderDiffTree(node, depth, expanded, toggle, selected, onTogglePath, o
 
   for (const f of [...node.files].sort((a, b) => a.file_path.localeCompare(b.file_path))) {
     const name = depth > 0 ? f.file_path.split('/').pop() : f.file_path
+    const failed = f.status === 'failed'
     rows.push(
       <tr key={f.file_path}>
         <td style={{ ...s.td, paddingLeft: indent || undefined }}>
@@ -129,9 +133,12 @@ function renderDiffTree(node, depth, expanded, toggle, selected, onTogglePath, o
             />
             <span style={depth > 0 ? s.dimPath : { fontFamily:'monospace', fontSize:'0.78rem', color:'#e8e8e8' }}>{name}</span>
           </span>
+          {failed && f.error && <div style={s.failMsg}>{f.error}</div>}
         </td>
         <td style={{ ...s.td, textAlign:'right' }}>
-          <span style={s.fileStatus(!f.server_hash)}>{f.server_hash ? 'modified' : 'new'}</span>
+          {failed
+            ? <span style={s.failStatus}>failed</span>
+            : <span style={s.fileStatus(!f.server_hash)}>{f.server_hash ? 'modified' : 'new'}</span>}
         </td>
       </tr>
     )
@@ -148,7 +155,7 @@ function PendingPanel({ device, onSyncDone }) {
   async function load() {
     const { data } = await supabase
       .from('discovery_results')
-      .select('file_path, local_hash, server_hash')
+      .select('file_path, local_hash, server_hash, status, error')
       .eq('device_id', device.id)
       .order('file_path')
     const items = data ?? []
@@ -202,15 +209,19 @@ function PendingPanel({ device, onSyncDone }) {
         }
       })
     })
-    // Clear local state optimistically — agent will call sync-complete
-    setDiffs([])
-    setSelected(new Set())
+    // Re-read rather than clearing optimistically: sync-complete only removes
+    // what actually reached the server, and anything left behind is the whole
+    // point — a failed push used to disappear here and look synced.
+    await new Promise(r => setTimeout(r, 2500))
+    await load()
     setSyncing(false)
     onSyncDone?.()
   }
 
   if (diffs === null) return <div style={{ ...s.notChecked, marginTop:'0.5rem' }}>Loading…</div>
   if (diffs.length === 0) return null
+
+  const failedCount = diffs.filter(d => d.status === 'failed').length
 
   return (
     <div style={s.pending}>
@@ -220,6 +231,11 @@ function PendingPanel({ device, onSyncDone }) {
           <span style={s.badge(diffs.length)}>{diffs.length}</span>
         </span>
       </div>
+      {failedCount > 0 &&
+        <div style={s.failBanner}>
+          {failedCount} file{failedCount > 1 ? 's' : ''} failed to reach the server on the last sync and {failedCount > 1 ? 'are' : 'is'} still pending. Check the agent log, then retry.
+        </div>
+      }
       <table style={s.table}>
         <tbody>
           {renderDiffTree(buildDiffTree(diffs), 0, expanded, toggleExpanded, selected, togglePath, toggleDir)}

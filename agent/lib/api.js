@@ -60,11 +60,20 @@ export class ApiClient {
     return res.json()
   }
 
-  async syncComplete(deviceId) {
+  /**
+   * `syncedPaths` is what the server clears from the pending list. Anything
+   * omitted stays pending on purpose — a push that threw must not leave the
+   * dashboard claiming the device is up to date.
+   */
+  async syncComplete(deviceId, syncedPaths, failed) {
     const res = await fetch(`${this.base}/sync-complete`, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({
+        device_id: deviceId,
+        synced_paths: syncedPaths ?? [],
+        failed: failed ?? [],
+      }),
     })
     if (!res.ok) throw new Error(`sync-complete failed: ${res.status}`)
     return res.json()

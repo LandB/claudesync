@@ -213,25 +213,41 @@ async function main() {
     .on('broadcast', { event: 'sync' }, async ({ payload }) => {
       const files = payload?.files ?? []
       console.log(`[sync] syncing ${files.length} file(s)...`)
+      const synced = []
+      const failed = []
       for (const filePath of files) {
         const absPath = filePath.startsWith('agents/') ? join(agentsPath, filePath.slice('agents/'.length)) : join(claudePath, filePath)
         try {
           let raw
-          try { raw = readFileSync(absPath) } catch { continue }
+          try { raw = readFileSync(absPath) }
+          catch (err) { failed.push({ path: filePath, error: `unreadable locally: ${err.message}` }); continue }
           const content = sanitizeHomePath(sanitizePluginPaths(filePath, raw, claudePath), claudePath)
           const hash = sha256(content)
           await api.push({ deviceId, filePath, content, hash, operation: 'upsert' })
+          synced.push(filePath)
           console.log(`[sync] pushed ${filePath}`)
         } catch (err) {
+          failed.push({ path: filePath, error: err.message })
           console.error(`[sync] error pushing ${filePath}:`, err.message)
         }
       }
       try {
-        await api.syncComplete(deviceId)
-        console.log('[sync] complete')
+        await api.syncComplete(deviceId, synced, failed)
+        console.log(`[sync] complete — ${synced.length} pushed, ${failed.length} failed`)
       } catch (err) {
         console.error('[sync] syncComplete error:', err.message)
       }
+      if (failed.length) {
+        for (const f of failed) console.error(`[sync] FAILED ${f.path}: ${f.error}`)
+        notify('ClaudeSync: sync incomplete', `${failed.length} file(s) failed to push — still pending in the dashboard.`)
+      }
+      writeStatus({
+        state: 'running',
+        device_id: deviceId,
+        hostname: hostname(),
+        pid: process.pid,
+        last_sync: { at: new Date().toISOString(), pushed: synced.length, failed },
+      })
     })
     .on('broadcast', { event: 'snapshot' }, async () => {
       console.log('[snapshot] pulling from server...')
